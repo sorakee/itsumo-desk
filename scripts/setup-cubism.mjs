@@ -75,3 +75,8 @@ try {
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
+
+const build = spawnSync(process.execPath, [join(repoRoot, "scripts", "build-cubism.mjs")], {
+  stdio: "inherit",
+});
+process.exit(build.status ?? 1);

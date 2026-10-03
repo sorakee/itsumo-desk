@@ -20,7 +20,8 @@
     "check": "biome check . && tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "format": "biome check --write .",
     "test": "vitest run --passWithNoTests",
-    "setup:cubism": "node scripts/setup-cubism.mjs"
+    "setup:cubism": "node scripts/setup-cubism.mjs",
+    "build:cubism": "node scripts/build-cubism.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

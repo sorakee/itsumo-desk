@@ -1,0 +1,24 @@
+{
+  // Compiles the vendored Cubism Web Framework (Live2D Open Software License) to JS and
+  // declarations. Its source does not pass the app's strict settings, so it is built
+  // separately and the app imports the output from vendor/cubism/Framework/dist/.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    // Keeps the class-field semantics of the SDK's own ES6 target.
+    "useDefineForClassFields": false,
+    "strict": false,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "rootDir": "../vendor/cubism/Framework/src",
+    "outDir": "../vendor/cubism/Framework/dist"
+  },
+  "include": [
+    "../vendor/cubism/Framework/src/**/*.ts",
+    "../vendor/cubism/Core/live2dcubismcore.d.ts"
+  ]
+}

@@ -23,8 +23,9 @@
     "noUncheckedIndexedAccess": true,
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@cubism/framework/*": ["./vendor/cubism/Framework/dist/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "vendor/cubism/Core/live2dcubismcore.d.ts"]
 }

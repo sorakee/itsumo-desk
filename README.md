@@ -39,9 +39,18 @@ the Node.js version the project needs, so your system Node version does not matt
 
 ```sh
 pnpm install
-pnpm setup:cubism --accept-license   # fetches the Live2D Cubism SDK into vendor/ (see below)
+pnpm setup:cubism --accept-license   # fetches and builds the Live2D Cubism SDK in vendor/
 pnpm tauri dev
 ```
+
+The Cubism SDK is required for typechecking, tests that touch the renderer, and every
+build. `setup:cubism` downloads it (accepting Live2D's licence, see below) and compiles
+the Cubism Web Framework into `vendor/cubism/Framework/dist/`; `pnpm build:cubism` redoes
+only the compile step.
+
+In dev, the companion loads a Live2D sample model from the gitignored `models/` folder:
+`models/hiyori_pro/runtime/hiyori_pro_t11.model3.json` by default, or any other
+`model3.json` under `models/` named by `VITE_DEV_MODEL` (path relative to `models/`).
 
 Checks:
 
@@ -65,7 +74,9 @@ Itsumo Desk does not include the Live2D Cubism SDK, Live2D models, the VOICEVOX 
 or VOICEVOX voices. Each has its own licence and usage terms, which you are responsible
 for following:
 
-- [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/)
+- [Live2D Cubism SDK](https://www.live2d.com/en/sdk/about/): the Cubism Core is under the
+  Live2D Proprietary Software License and the Cubism Web Framework under the Live2D Open
+  Software License. Neither is covered by this repository's MIT licence.
 - [VOICEVOX](https://voicevox.hiroshiba.jp/)
 
 ## Licence
