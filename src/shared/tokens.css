@@ -1,0 +1,15 @@
+:root {
+  --font-ui: "Segoe UI", system-ui, sans-serif;
+  --color-text: #f2f2f5;
+  --color-text-muted: #a0a0ab;
+  --color-surface: #2b2c33;
+  --color-accent: #2f8fdd;
+
+  font-family: var(--font-ui);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+body {
+  margin: 0;
+}

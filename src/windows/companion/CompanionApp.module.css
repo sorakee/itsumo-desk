@@ -1,0 +1,18 @@
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.name {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.version {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-muted);
+}
