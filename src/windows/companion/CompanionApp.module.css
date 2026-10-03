@@ -1,4 +1,5 @@
 .stage {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   height: 100vh;
@@ -7,29 +8,29 @@
 }
 
 .placeholder {
+  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
   border: 2px dashed var(--color-outline);
   border-radius: 16px;
   background: var(--color-surface-translucent);
+  text-align: center;
 }
 
-.name {
+.status {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.125rem;
   font-weight: 600;
 }
 
-.version {
-  margin: 0.25rem 0 0;
+.detail {
+  margin: 0;
   color: var(--color-text-muted);
-}
-
-.hint {
-  margin: 1.5rem 0 0;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
 }
