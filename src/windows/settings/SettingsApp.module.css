@@ -1,0 +1,30 @@
+.page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 24px 32px;
+  background: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.version {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.empty {
+  margin: 32px 0 0;
+  color: var(--color-text-muted);
+}

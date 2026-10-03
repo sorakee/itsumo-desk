@@ -1,9 +1,20 @@
 .stage {
+  box-sizing: border-box;
   display: flex;
+  height: 100vh;
+  padding: 8px;
+  user-select: none;
+}
+
+.placeholder {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  border: 2px dashed var(--color-outline);
+  border-radius: 16px;
+  background: var(--color-surface-translucent);
 }
 
 .name {
@@ -15,4 +26,10 @@
 .version {
   margin: 0.25rem 0 0;
   color: var(--color-text-muted);
+}
+
+.hint {
+  margin: 1.5rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
 }

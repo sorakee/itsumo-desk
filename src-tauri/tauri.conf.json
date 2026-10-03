@@ -15,7 +15,13 @@
         "label": "companion",
         "title": "Itsumo Desk",
         "width": 480,
-        "height": 640
+        "height": 640,
+        "visible": false,
+        "transparent": true,
+        "decorations": false,
+        "shadow": false,
+        "resizable": false,
+        "skipTaskbar": true
       }
     ],
     "security": {
