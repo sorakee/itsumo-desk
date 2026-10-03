@@ -1,0 +1,30 @@
+# Local planning docs and agent instructions
+docs/
+CLAUDE.md
+reference/
+
+# Dependencies and build output
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Live2D Cubism SDK and models (fetched locally, not redistributable here)
+vendor/
+*.moc3
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and OS/editor files
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local Live2D models for development (not redistributable)
+models/
