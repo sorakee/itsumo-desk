@@ -14,6 +14,16 @@ export default defineConfig({
     },
   },
 
+  // One HTML entry per Tauri window.
+  build: {
+    rolldownOptions: {
+      input: {
+        companion: fileURLToPath(new URL("./index.html", import.meta.url)),
+        settings: fileURLToPath(new URL("./settings.html", import.meta.url)),
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

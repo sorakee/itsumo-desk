@@ -3,13 +3,15 @@
   --color-text: #f2f2f5;
   --color-text-muted: #a0a0ab;
   --color-surface: #2b2c33;
+  --color-surface-translucent: rgb(43 44 51 / 60%);
+  --color-outline: rgb(242 242 245 / 35%);
   --color-accent: #2f8fdd;
 
   font-family: var(--font-ui);
   color: var(--color-text);
-  background: var(--color-surface);
 }
 
+/* No background here: the companion window is transparent. Each window's root sets its own. */
 body {
   margin: 0;
 }
