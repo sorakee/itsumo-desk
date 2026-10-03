@@ -33,10 +33,31 @@ Tauri 2 (Rust) · React + TypeScript · Vite · Live2D Cubism SDK for Web · SQL
 
 ## Development
 
-Prerequisites: Node.js 20+, pnpm, Rust (stable), and the
-[Tauri prerequisites](https://tauri.app/start/prerequisites/) for Windows.
+Prerequisites: [pnpm](https://pnpm.io/), Rust (stable), and the
+[Tauri prerequisites](https://tauri.app/start/prerequisites/) for Windows. pnpm downloads
+the Node.js version the project needs, so your system Node version does not matter.
 
-Setup instructions will be added once the project scaffold lands.
+```sh
+pnpm install
+pnpm setup:cubism --accept-license   # fetches the Live2D Cubism SDK into vendor/ (see below)
+pnpm tauri dev
+```
+
+Checks:
+
+```sh
+pnpm check    # Biome lint/format + TypeScript
+pnpm test     # Vitest
+pnpm format   # apply Biome fixes
+
+cd src-tauri
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test    # also regenerates src/ipc/bindings.ts
+```
+
+`src/ipc/bindings.ts` is generated from the Rust command and event types. After changing
+them, run `cargo test` and commit the updated file; CI fails if it is stale.
 
 ## Third-party components
 
