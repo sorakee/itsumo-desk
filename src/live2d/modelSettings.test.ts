@@ -129,4 +129,16 @@ describe("parseModelSettings", () => {
     expect(settings.hitAreas).toEqual([{ id: "HitArea", name: "HitArea" }]);
     expect(settings.groups).toEqual([{ name: "LipSync", ids: ["ParamMouthOpenY"] }]);
   });
+
+  it("reads Layout in either key spelling and ignores the rest", () => {
+    const settings = parseModelSettings(
+      model({}, { Layout: { Width: 2, center_y: 0.5, Top: "high", constructor: 1, X: 3 } }),
+    );
+    expect(settings.layout).toEqual({ width: 2, centerY: 0.5 });
+  });
+
+  it("treats a Layout with nothing usable as absent", () => {
+    expect(parseModelSettings(model({}, { Layout: { Foo: 1 } })).layout).toBeUndefined();
+    expect(parseModelSettings(model({}, { Layout: [1, 2] })).layout).toBeUndefined();
+  });
 });

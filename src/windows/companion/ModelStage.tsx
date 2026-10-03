@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { loadFraming } from "@/ipc";
 import type { ModelSource } from "@/live2d/model";
 import { createStage, isAbortError, type Stage } from "@/live2d/stage";
+import { startInteraction } from "@/windows/companion/interaction";
 import styles from "./ModelStage.module.css";
 
 export type StageStatus =
@@ -26,16 +28,19 @@ export function ModelStage({ source, onStatusChange }: ModelStageProps) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let created: Stage;
+    let created: Stage | null = null;
     try {
       created = createStage(canvas);
     } catch (error) {
       onStatusChange({ kind: "error", message: errorMessage(error) });
-      return;
     }
+    // Runs without a stage too, so the error placeholder can still be dragged.
+    const stopInteraction = startInteraction(created);
     setStage(created);
     return () => {
-      created.dispose();
+      // First: it saves pending framing changes, which reads the stage.
+      stopInteraction();
+      created?.dispose();
       setStage(null);
     };
   }, [onStatusChange]);
@@ -47,17 +52,28 @@ export function ModelStage({ source, onStatusChange }: ModelStageProps) {
       return;
     }
     onStatusChange({ kind: "loading" });
-    stage.load(source).then(
-      (manifest) => {
-        console.debug("model manifest", manifest);
-        onStatusChange({ kind: "ready" });
-      },
-      (error: unknown) => {
-        if (isAbortError(error)) return;
-        console.error("failed to load model", error);
-        onStatusChange({ kind: "error", message: errorMessage(error) });
-      },
-    );
+    let cancelled = false;
+    loadFraming(source.id)
+      .catch((error: unknown) => {
+        console.warn("failed to load the saved framing", error);
+        return null;
+      })
+      .then((framing) => (cancelled ? undefined : stage.load(source, framing ?? undefined)))
+      .then(
+        (manifest) => {
+          if (!manifest) return;
+          console.debug("model manifest", manifest);
+          onStatusChange({ kind: "ready" });
+        },
+        (error: unknown) => {
+          if (isAbortError(error)) return;
+          console.error("failed to load model", error);
+          onStatusChange({ kind: "error", message: errorMessage(error) });
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
   }, [stage, source, onStatusChange]);
 
   return <canvas ref={canvasRef} className={styles.canvas} />;

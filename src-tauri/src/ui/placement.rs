@@ -1,5 +1,6 @@
-//! Where the companion window opens: the saved position if it is still on a connected
-//! monitor, otherwise the bottom-right corner of the primary monitor's work area.
+//! Where the companion window goes: on startup, the saved position if it is still on a
+//! connected monitor, otherwise the bottom-right corner of the primary monitor's work area;
+//! when scaled, wherever keeps the character standing in the same spot.
 
 use crate::settings::WindowPosition;
 
@@ -58,6 +59,24 @@ fn bottom_right(area: Rect, (width, height): (u32, u32)) -> WindowPosition {
     WindowPosition {
         x: clamp_to_i32(x.max(i64::from(area.x))),
         y: clamp_to_i32(y.max(i64::from(area.y))),
+    }
+}
+
+/// Resizes `window` to `size` around its bottom-centre, so the character keeps standing in
+/// the same place, then moves it down if needed so its top stays inside `area`.
+pub fn rescale(window: Rect, (width, height): (u32, u32), area: Option<Rect>) -> Rect {
+    let center_x = i64::from(window.x) + i64::from(window.width) / 2;
+    let bottom = i64::from(window.y) + i64::from(window.height);
+    let x = center_x - i64::from(width) / 2;
+    let mut y = bottom - i64::from(height);
+    if let Some(area) = area {
+        y = y.max(i64::from(area.y));
+    }
+    Rect {
+        x: clamp_to_i32(x),
+        y: clamp_to_i32(y),
+        width,
+        height,
     }
 }
 
@@ -139,6 +158,33 @@ mod tests {
             initial_position(None, WINDOW, &[small], Some(small)),
             at(0, 0)
         );
+    }
+
+    #[test]
+    fn rescale_keeps_the_bottom_centre() {
+        let window = Rect {
+            x: 1440,
+            y: 392,
+            width: 480,
+            height: 640,
+        };
+        let grown = rescale(window, (600, 800), Some(PRIMARY));
+        assert_eq!((grown.x, grown.y), (1380, 232));
+        let shrunk = rescale(window, (240, 320), Some(PRIMARY));
+        assert_eq!((shrunk.x, shrunk.y), (1560, 712));
+    }
+
+    #[test]
+    fn rescale_keeps_the_top_inside_the_work_area() {
+        let window = Rect {
+            x: 100,
+            y: 100,
+            width: 480,
+            height: 640,
+        };
+        let grown = rescale(window, (720, 960), Some(PRIMARY));
+        assert_eq!((grown.x, grown.y), (-20, 0));
+        assert_eq!((grown.width, grown.height), (720, 960));
     }
 
     #[test]
