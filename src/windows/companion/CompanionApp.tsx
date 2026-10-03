@@ -1,17 +1,13 @@
-import { type MouseEvent, useState } from "react";
-import { startWindowDrag } from "@/ipc";
+import { useState } from "react";
 import { devModelSource } from "@/windows/companion/devModel";
+import { HIT_REGION_ATTRIBUTE } from "@/windows/companion/interaction";
 import { ModelStage, type StageStatus } from "@/windows/companion/ModelStage";
 import styles from "./CompanionApp.module.css";
 
 const source = devModelSource();
 
-// Until hit regions exist, the whole window is a drag handle.
-function onMouseDown(event: MouseEvent) {
-  if (event.button === 0) {
-    void startWindowDrag();
-  }
-}
+// Makes the placeholder catch clicks (and drag the window) like the model does.
+const hitRegion = { [HIT_REGION_ATTRIBUTE]: true };
 
 function statusText(status: StageStatus): string | null {
   switch (status.kind) {
@@ -30,10 +26,10 @@ export function CompanionApp() {
   const text = statusText(status);
 
   return (
-    <main className={styles.stage} onMouseDown={onMouseDown}>
+    <main className={styles.stage}>
       <ModelStage source={source} onStatusChange={setStatus} />
       {text && (
-        <div className={styles.placeholder}>
+        <div className={styles.placeholder} {...hitRegion}>
           <p className={styles.status}>{text}</p>
           {status.kind === "error" && <p className={styles.detail}>{status.message}</p>}
         </div>

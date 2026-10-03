@@ -1,9 +1,11 @@
 mod commands;
+mod events;
+mod platform;
 mod settings;
 mod ui;
 
 use tauri::{Manager, RunEvent};
-use tauri_specta::{collect_commands, Builder};
+use tauri_specta::{collect_commands, collect_events, Builder};
 use tracing::warn;
 
 use settings::SettingsStore;
@@ -12,7 +14,16 @@ use settings::SettingsStore;
 const APP_DIR: &str = "itsumo-desk";
 
 fn ipc_builder() -> Builder<tauri::Wry> {
-    Builder::<tauri::Wry>::new().commands(collect_commands![commands::app::app_info])
+    Builder::<tauri::Wry>::new()
+        .commands(collect_commands![
+            commands::app::app_info,
+            commands::companion::set_click_through,
+            commands::companion::scale_companion,
+            commands::companion::character_framing,
+            commands::companion::save_character_framing,
+            commands::companion::clear_character_framing,
+        ])
+        .events(collect_events![events::CursorMoved, events::ResetFraming])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

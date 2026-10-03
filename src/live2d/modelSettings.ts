@@ -29,6 +29,16 @@ export interface ParameterGroup {
   ids: string[];
 }
 
+/** Where the model sits in the view, in view units (the view is 2 units tall). */
+export interface ModelLayout {
+  width?: number;
+  height?: number;
+  centerY?: number;
+  top?: number;
+  bottom?: number;
+  y?: number;
+}
+
 export interface ModelSettings {
   moc: string;
   textures: string[];
@@ -40,6 +50,7 @@ export interface ModelSettings {
   motionGroups: MotionGroup[];
   hitAreas: HitAreaEntry[];
   groups: ParameterGroup[];
+  layout?: ModelLayout;
 }
 
 export class ModelSettingsError extends Error {
@@ -159,6 +170,34 @@ function parseGroups(value: unknown): ParameterGroup[] {
   return groups;
 }
 
+// The Framework matches lower-case keys (`center_y`) while editors write `CenterY`; accept
+// either spelling.
+const LAYOUT_KEYS = new Map<string, keyof ModelLayout>([
+  ["width", "width"],
+  ["height", "height"],
+  ["centery", "centerY"],
+  ["top", "top"],
+  ["bottom", "bottom"],
+  ["y", "y"],
+]);
+
+function parseLayout(value: unknown): ModelLayout | undefined {
+  if (!isObject(value)) {
+    return undefined;
+  }
+  const layout: ModelLayout = {};
+  let found = false;
+  for (const [key, raw] of Object.entries(value)) {
+    const field = LAYOUT_KEYS.get(key.toLowerCase().replaceAll("_", ""));
+    const number = finiteNumber(raw);
+    if (field !== undefined && number !== undefined) {
+      layout[field] = number;
+      found = true;
+    }
+  }
+  return found ? layout : undefined;
+}
+
 export function parseModelSettings(json: unknown): ModelSettings {
   if (!isObject(json) || !isObject(json.FileReferences)) {
     throw new ModelSettingsError("model3.json has no FileReferences");
@@ -182,6 +221,7 @@ export function parseModelSettings(json: unknown): ModelSettings {
     motionGroups: parseMotionGroups(refs.Motions),
     hitAreas: parseHitAreas(json.HitAreas),
     groups: parseGroups(json.Groups),
+    layout: parseLayout(json.Layout),
     physics: safeRelativePath(refs.Physics),
     pose: safeRelativePath(refs.Pose),
     displayInfo: safeRelativePath(refs.DisplayInfo),

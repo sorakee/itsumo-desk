@@ -11,5 +11,5 @@ export function devModelSource(): ModelSource | null {
     return null;
   }
   const path = import.meta.env.VITE_DEV_MODEL ?? DEFAULT_DEV_MODEL;
-  return { url: new URL(`/models/${path}`, window.location.href).href };
+  return { id: `dev:${path}`, url: new URL(`/models/${path}`, window.location.href).href };
 }

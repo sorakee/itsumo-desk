@@ -30,6 +30,10 @@ tracing-subscriber = "0.3"
 tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["sync", "time"] }
 
+[target.'cfg(windows)'.dependencies]
+# Already in the tree through Tauri at this version; used directly by `platform/windows`.
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [lints.rust]
 # `platform/` opts back in per block with a SAFETY comment.
 unsafe_code = "deny"

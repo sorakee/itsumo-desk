@@ -104,8 +104,8 @@ fn load(path: &Path) -> Settings {
             return Settings::default();
         }
     };
-    match serde_json::from_str(&text) {
-        Ok(settings) => settings,
+    match serde_json::from_str::<Settings>(&text) {
+        Ok(settings) => settings.sanitized(),
         Err(error) => {
             // Keep the broken file for the user instead of overwriting it on the next save.
             warn!(%error, "settings file is invalid, moving it aside and using defaults");
@@ -178,6 +178,24 @@ mod tests {
         let settings = load(&dir.config());
         assert!(!settings.companion.always_on_top);
         assert_eq!(settings.companion.position, None);
+    }
+
+    #[test]
+    fn out_of_range_values_are_clamped_on_load() {
+        let dir = TempDir::new("clamped");
+        fs::write(
+            dir.config(),
+            r#"{"companion":{"scale":40},"characters":{"a":{"framing":{"zoom":0,"centerY":0.5}}}}"#,
+        )
+        .expect("write config");
+
+        let settings = load(&dir.config());
+        assert_eq!(settings.companion.scale, crate::settings::MAX_SCALE);
+        let framing = settings.characters["a"].framing.expect("framing kept");
+        assert_eq!(framing.zoom, 0.25);
+        // Saved before framing had a horizontal centre.
+        assert_eq!(framing.center_x, 0.0);
+        assert_eq!(framing.center_y, 0.5);
     }
 
     #[test]

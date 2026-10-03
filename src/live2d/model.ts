@@ -4,13 +4,19 @@ import { CubismMatrix44 } from "@cubism/framework/math/cubismmatrix44";
 import { CubismMoc } from "@cubism/framework/model/cubismmoc";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
 import { CUBISM_SHADER_PATH } from "@/live2d/cubism";
+import { type Bounds, boundsOf } from "@/live2d/framing";
 import { buildManifest, type ModelManifest, parseDisplayNames } from "@/live2d/manifest";
-import { parseModelSettings } from "@/live2d/modelSettings";
+import { type ModelLayout, parseModelSettings } from "@/live2d/modelSettings";
 
 /** Where a model lives: the URL of its `model3.json`. Other files resolve relative to it. */
 export interface ModelSource {
+  /** Identifies the character for per-character settings such as framing. */
+  id: string;
   url: string;
 }
+
+// Drawables fainter than this do not count towards the model's visible extent.
+const VISIBLE_OPACITY = 0.01;
 
 export class ModelLoadError extends Error {
   override name = "ModelLoadError";
@@ -81,6 +87,8 @@ export interface LoadedModel {
 export class Live2DModel extends CubismUserModel {
   private readonly textures: WebGLTexture[] = [];
   private readonly mvp = new CubismMatrix44();
+  /** From model3.json, when the author set one. */
+  layout: ModelLayout | undefined;
 
   private constructor(private readonly gl: WebGL2RenderingContext) {
     super();
@@ -130,6 +138,7 @@ export class Live2DModel extends CubismUserModel {
         displayNames: parseDisplayNames(displayInfo),
       });
       model.centerCanvas();
+      model.layout = settings.layout;
 
       if (physics) {
         model.loadPhysics(physics, physics.byteLength);
@@ -171,6 +180,32 @@ export class Live2DModel extends CubismUserModel {
       ((CanvasOriginX - CanvasWidth / 2) / PixelsPerUnit) * scale,
       ((CanvasHeight / 2 - CanvasOriginY) / PixelsPerUnit) * scale,
     );
+  }
+
+  /** The extent of each visible drawable in model units, as currently posed. */
+  drawableBounds(): Bounds[] {
+    const model = this.getModel();
+    // The model matrix only scales and translates, so the corners map to corners.
+    const matrix = this.getModelMatrix();
+    const all: Bounds[] = [];
+    for (let i = 0; i < model.getDrawableCount(); i++) {
+      if (
+        !model.getDrawableDynamicFlagIsVisible(i) ||
+        model.getDrawableOpacity(i) <= VISIBLE_OPACITY
+      ) {
+        continue;
+      }
+      const bounds = boundsOf(model.getDrawableVertices(i));
+      if (bounds) {
+        all.push({
+          left: matrix.transformX(bounds.left),
+          right: matrix.transformX(bounds.right),
+          bottom: matrix.transformY(bounds.bottom),
+          top: matrix.transformY(bounds.top),
+        });
+      }
+    }
+    return all;
   }
 
   /** Advances physics and pose by `deltaSeconds` and applies the parameters. */
