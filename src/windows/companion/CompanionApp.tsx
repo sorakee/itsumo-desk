@@ -1,29 +1,43 @@
-import { type MouseEvent, useEffect, useState } from "react";
-import { type AppInfo, commands, startWindowDrag } from "@/ipc";
+import { type MouseEvent, useState } from "react";
+import { startWindowDrag } from "@/ipc";
+import { devModelSource } from "@/windows/companion/devModel";
+import { ModelStage, type StageStatus } from "@/windows/companion/ModelStage";
 import styles from "./CompanionApp.module.css";
 
-// Until the model and its hit regions exist, the whole window is a drag handle and the
-// placeholder outlines the window bounds.
+const source = devModelSource();
+
+// Until hit regions exist, the whole window is a drag handle.
 function onMouseDown(event: MouseEvent) {
   if (event.button === 0) {
     void startWindowDrag();
   }
 }
 
-export function CompanionApp() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
+function statusText(status: StageStatus): string | null {
+  switch (status.kind) {
+    case "ready":
+    case "loading":
+      return null;
+    case "empty":
+      return "No character loaded";
+    case "error":
+      return "Could not load the character";
+  }
+}
 
-  useEffect(() => {
-    commands.appInfo().then(setInfo);
-  }, []);
+export function CompanionApp() {
+  const [status, setStatus] = useState<StageStatus>({ kind: "loading" });
+  const text = statusText(status);
 
   return (
     <main className={styles.stage} onMouseDown={onMouseDown}>
-      <div className={styles.placeholder}>
-        <h1 className={styles.name}>{info?.name ?? "Itsumo Desk"}</h1>
-        {info && <p className={styles.version}>v{info.version}</p>}
-        <p className={styles.hint}>Drag to move</p>
-      </div>
+      <ModelStage source={source} onStatusChange={setStatus} />
+      {text && (
+        <div className={styles.placeholder}>
+          <p className={styles.status}>{text}</p>
+          {status.kind === "error" && <p className={styles.detail}>{status.message}</p>}
+        </div>
+      )}
     </main>
   );
 }
