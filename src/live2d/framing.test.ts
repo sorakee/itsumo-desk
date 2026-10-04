@@ -4,8 +4,10 @@ import {
   boundsOf,
   clampFraming,
   defaultFraming,
+  faceAnchor,
   framingFromLayout,
   medianCenterX,
+  modelToWindow,
   panFraming,
   unionOf,
   upperBodyFraming,
@@ -138,5 +140,40 @@ describe("clampFraming", () => {
       centerX: -2,
       centerY: 2,
     });
+  });
+});
+
+describe("faceAnchor", () => {
+  it("uses the head hit area when there is one", () => {
+    expect(faceAnchor([box(-1, 1, -1, 1)], box(0, 0.2, 0.6, 0.8))).toEqual({ x: 0.1, y: 0.7 });
+  });
+
+  it("otherwise sits near the top, above the body's centre", () => {
+    const anchor = faceAnchor([box(-0.2, 0, -1, 1), box(-0.1, 0.1, 0, 0.5), box(0, 0.2, 0, 0.5)]);
+    expect(anchor?.x).toBeCloseTo(0);
+    expect(anchor?.y).toBeCloseTo(0.76);
+  });
+
+  it("is undefined without a visible model", () => {
+    expect(faceAnchor([])).toBeUndefined();
+  });
+});
+
+describe("modelToWindow", () => {
+  it("puts the framing centre in the middle of the window", () => {
+    expect(
+      modelToWindow({ zoom: 2, centerX: 0.3, centerY: -0.4 }, 0.75, { x: 0.3, y: -0.4 }),
+    ).toEqual({
+      x: 0.5,
+      y: 0.5,
+    });
+  });
+
+  it("spans the window height with 2 / zoom model units", () => {
+    const framing = { zoom: 2, centerX: 0, centerY: 0 };
+    expect(modelToWindow(framing, 0.75, { x: 0, y: 0.5 }).y).toBeCloseTo(0);
+    expect(modelToWindow(framing, 0.75, { x: 0, y: -0.5 }).y).toBeCloseTo(1);
+    // Model units are square: 0.375 units across is half the width of a 3:4 window.
+    expect(modelToWindow(framing, 0.75, { x: 0.375, y: 0 }).x).toBeCloseTo(1);
   });
 });

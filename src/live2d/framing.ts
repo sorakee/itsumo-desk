@@ -18,6 +18,11 @@ export interface Bounds {
   top: number;
 }
 
+export interface ModelPoint {
+  x: number;
+  y: number;
+}
+
 /** What the default framing is derived from. */
 export interface ModelShape {
   layout: ModelLayout | undefined;
@@ -31,6 +36,9 @@ export interface ModelShape {
 // what gets saved.
 const ZOOM_RANGE = [0.25, 8] as const;
 const CENTER_RANGE = [-2, 2] as const;
+
+/** Where the face is assumed to be without a head hit area: this share down the model. */
+const FACE_FROM_TOP = 0.12;
 
 /** Share of the visible model, from the top, that the default framing shows. */
 const UPPER_BODY_SHARE = 0.6;
@@ -168,4 +176,37 @@ export function panFraming(framing: Framing, dx: number, dy: number, extent?: Bo
     },
     extent,
   );
+}
+
+/**
+ * Where the character looks from: the centre of its head hit area if it has one, otherwise
+ * a point near the top of the visible model, above the body's centre.
+ */
+export function faceAnchor(drawables: Bounds[], head?: Bounds): ModelPoint | undefined {
+  if (head) {
+    return { x: (head.left + head.right) / 2, y: (head.bottom + head.top) / 2 };
+  }
+  const extent = unionOf(drawables);
+  if (!extent) {
+    return undefined;
+  }
+  return {
+    x: medianCenterX(drawables),
+    y: extent.top - (extent.top - extent.bottom) * FACE_FROM_TOP,
+  };
+}
+
+/**
+ * Where a model point appears in a window of `aspect` (width over height), as shares of
+ * the window from its top-left corner.
+ */
+export function modelToWindow(
+  { zoom, centerX, centerY }: Framing,
+  aspect: number,
+  point: ModelPoint,
+): ModelPoint {
+  return {
+    x: 0.5 + ((point.x - centerX) * zoom) / (2 * aspect),
+    y: 0.5 - ((point.y - centerY) * zoom) / 2,
+  };
 }

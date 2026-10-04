@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadFraming } from "@/ipc";
 import type { ModelSource } from "@/live2d/model";
 import { createStage, isAbortError, type Stage } from "@/live2d/stage";
+import { startDevShortcuts } from "@/windows/companion/devShortcuts";
 import { startInteraction } from "@/windows/companion/interaction";
 import styles from "./ModelStage.module.css";
 
@@ -36,10 +37,12 @@ export function ModelStage({ source, onStatusChange }: ModelStageProps) {
     }
     // Runs without a stage too, so the error placeholder can still be dragged.
     const stopInteraction = startInteraction(created);
+    const stopShortcuts = import.meta.env.DEV && created ? startDevShortcuts(created) : undefined;
     setStage(created);
     return () => {
       // First: it saves pending framing changes, which reads the stage.
       stopInteraction();
+      stopShortcuts?.();
       created?.dispose();
       setStage(null);
     };

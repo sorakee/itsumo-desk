@@ -9,12 +9,19 @@ import {
   clampFraming,
   defaultFraming,
   type Framing,
+  faceAnchor,
+  type ModelPoint,
+  modelToWindow,
   panFraming,
   unionOf,
   zoomFraming,
 } from "@/live2d/framing";
+import { type GazeVector, gazeTowards } from "@/live2d/gaze";
+import { Life } from "@/live2d/life";
 import type { ModelManifest } from "@/live2d/manifest";
 import { Live2DModel, type LoadedModel, type ModelSource } from "@/live2d/model";
+import { ModelParameters } from "@/live2d/parameters";
+import type { PresetName } from "@/live2d/presets";
 
 /** CSS pixels relative to the viewport. */
 export interface Point {
@@ -47,6 +54,12 @@ export interface Stage {
    */
   setPointer(point: Point | null): void;
   onHitChange(listener: (hit: boolean) => void): () => void;
+  /** Where the cursor is, inside the window or not, for the gaze to follow. */
+  setCursor(point: Point): void;
+  /** Plays a parameter preset, replacing any playing one. */
+  playPreset(name: PresetName): void;
+  /** Fades out the playing preset, e.g. ends a doze. */
+  stopPreset(): void;
   dispose(): void;
 }
 
@@ -56,11 +69,21 @@ interface OnStage extends LoadedModel {
   defaultFraming: Framing;
   /** The visible model's extent; framing keeps the window's centre inside it. */
   extent: Bounds | undefined;
+  /** Where the gaze is measured from. */
+  face: ModelPoint | undefined;
+  parameters: ModelParameters;
+  life: Life;
 }
 
 // High-refresh monitors would otherwise drive the loop at 144 Hz for no visible gain.
 const MAX_FPS = 60;
+// Idle motion, breathing, sway and an easing gaze look the same at half the rate. Full rate
+// is kept while the cursor is over the window (the hit test reads back drawn frames) or a
+// preset plays.
+const IDLE_FPS = 30;
+// Slightly under the frame time, so vsync jitter does not skip a frame.
 const MIN_FRAME_MS = 1000 / MAX_FPS - 1;
+const IDLE_MIN_FRAME_MS = 1000 / IDLE_FPS - 1;
 // Caps the physics step after a stall so hair does not fly off.
 const MAX_DELTA_SECONDS = 0.1;
 // Premultiplied alpha (0-255) from which a pixel counts as part of the model; anti-aliased
@@ -97,6 +120,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   // What the last load asked for, kept up to date so a context-loss reload looks the same.
   let requestedFraming: Framing | undefined;
   let pointer: Point | null = null;
+  let cursor: Point | null = null;
+  let cursorMovedAt = -Infinity;
   let probeDue = false;
   let lastProbe = 0;
   let hit = false;
@@ -108,7 +133,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
   function drawFrame(now: number) {
     frame = requestAnimationFrame(drawFrame);
-    if (!current || (lastFrame !== undefined && now - lastFrame < MIN_FRAME_MS)) {
+    if (!current) {
+      return;
+    }
+    const minFrameMs =
+      pointer !== null || current.life.presets.playing ? MIN_FRAME_MS : IDLE_MIN_FRAME_MS;
+    if (lastFrame !== undefined && now - lastFrame < minFrameMs) {
       return;
     }
     const delta =
@@ -132,11 +162,39 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     projection.scale(scaleX, zoom);
     projection.translate(-centerX * scaleX, -centerY * zoom);
 
+    const { model, life, parameters } = onStage;
+    model.updateMotion(delta, life.presets.playing);
+    life.update(
+      delta,
+      {
+        cursor: gazeAt(onStage),
+        cursorStillFor: (performance.now() - cursorMovedAt) / 1000,
+        motionBlinks: model.motionBlinks,
+      },
+      parameters,
+    );
+    model.update(delta);
+
     gl.viewport(0, 0, width, height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    onStage.model.update(delta);
-    onStage.model.draw(projection, [0, 0, width, height]);
+    model.draw(projection, [0, 0, width, height]);
+  }
+
+  /** The gaze towards the cursor from the model's face as currently framed. */
+  function gazeAt({ face, framing }: OnStage): GazeVector | null {
+    if (!cursor || !face) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.height === 0) {
+      return null;
+    }
+    const at = modelToWindow(framing, rect.width / rect.height, face);
+    return gazeTowards(
+      cursor.x - (rect.left + at.x * rect.width),
+      cursor.y - (rect.top + at.y * rect.height),
+    );
   }
 
   /**
@@ -285,6 +343,19 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       return () => hitListeners.delete(listener);
     },
 
+    setCursor(point) {
+      cursor = point;
+      cursorMovedAt = performance.now();
+    },
+
+    playPreset(name) {
+      current?.life.presets.play(name);
+    },
+
+    stopPreset() {
+      current?.life.presets.stop();
+    },
+
     async load(next, framing) {
       pending?.abort();
       const controller = new AbortController();
@@ -303,9 +374,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       current?.model.release();
       // Vertex positions are only valid once the model has been updated.
       loaded.model.update(0);
-      const { model } = loaded;
+      const { model, manifest } = loaded;
       const drawables = model.drawableBounds();
       const extent = unionOf(drawables);
+      const headArea = manifest.hitAreas.find((h) => /head|face/i.test(`${h.id} ${h.name}`));
       const fallback = clampFraming(
         defaultFraming({ layout: model.layout, canvasAspect: model.aspectRatio, drawables }),
         extent,
@@ -317,9 +389,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
         framing: framing ? clampFraming(framing, extent) : fallback,
         defaultFraming: fallback,
         extent,
+        face: faceAnchor(drawables, headArea && model.drawableBoundsById(headArea.id)),
+        parameters: new ModelParameters(model.getModel(), manifest),
+        life: new Life(manifest),
       };
       syncLoop();
-      return loaded.manifest;
+      return manifest;
     },
 
     dispose() {

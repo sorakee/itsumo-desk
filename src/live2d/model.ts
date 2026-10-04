@@ -5,6 +5,7 @@ import { CubismMoc } from "@cubism/framework/model/cubismmoc";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
 import { CUBISM_SHADER_PATH } from "@/live2d/cubism";
 import { type Bounds, boundsOf } from "@/live2d/framing";
+import { createClip, IdleLoop, idleGroup } from "@/live2d/idleMotion";
 import { buildManifest, type ModelManifest, parseDisplayNames } from "@/live2d/manifest";
 import { type ModelLayout, parseModelSettings } from "@/live2d/modelSettings";
 
@@ -89,6 +90,7 @@ export class Live2DModel extends CubismUserModel {
   private readonly mvp = new CubismMatrix44();
   /** From model3.json, when the author set one. */
   layout: ModelLayout | undefined;
+  private idle: IdleLoop | undefined;
 
   private constructor(private readonly gl: WebGL2RenderingContext) {
     super();
@@ -109,12 +111,17 @@ export class Live2DModel extends CubismUserModel {
     const at = (path: string | undefined) =>
       path === undefined ? undefined : resolve(source, path);
 
-    const [moc, bitmaps, physics, pose, displayInfo] = await Promise.all([
+    const idleMotions = idleGroup(settings.motionGroups)?.motions ?? [];
+
+    const [moc, bitmaps, physics, pose, displayInfo, idleBytes] = await Promise.all([
       fetchBytes(resolve(source, settings.moc), signal),
       Promise.all(settings.textures.map((path) => fetchBitmap(resolve(source, path), signal))),
       fetchOptional(at(settings.physics), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.pose), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.displayInfo), signal, (r) => r.json()),
+      Promise.all(
+        idleMotions.map((m) => fetchOptional(at(m.file), signal, (r) => r.arrayBuffer())),
+      ),
     ]);
 
     const model = new Live2DModel(gl);
@@ -139,6 +146,14 @@ export class Live2DModel extends CubismUserModel {
       });
       model.centerCanvas();
       model.layout = settings.layout;
+      model.idle = new IdleLoop(
+        model._motionManager,
+        idleMotions.flatMap((entry, i) => {
+          const bytes = idleBytes[i];
+          const clip = bytes && createClip(bytes, entry, manifest);
+          return clip ? [clip] : [];
+        }),
+      );
 
       if (physics) {
         model.loadPhysics(physics, physics.byteLength);
@@ -185,8 +200,6 @@ export class Live2DModel extends CubismUserModel {
   /** The extent of each visible drawable in model units, as currently posed. */
   drawableBounds(): Bounds[] {
     const model = this.getModel();
-    // The model matrix only scales and translates, so the corners map to corners.
-    const matrix = this.getModelMatrix();
     const all: Bounds[] = [];
     for (let i = 0; i < model.getDrawableCount(); i++) {
       if (
@@ -195,17 +208,49 @@ export class Live2DModel extends CubismUserModel {
       ) {
         continue;
       }
-      const bounds = boundsOf(model.getDrawableVertices(i));
+      const bounds = this.boundsOfDrawable(i);
       if (bounds) {
-        all.push({
-          left: matrix.transformX(bounds.left),
-          right: matrix.transformX(bounds.right),
-          bottom: matrix.transformY(bounds.bottom),
-          top: matrix.transformY(bounds.top),
-        });
+        all.push(bounds);
       }
     }
     return all;
+  }
+
+  /** The extent of a drawable in model units, visible or not (hit areas are often hidden). */
+  drawableBoundsById(id: string): Bounds | undefined {
+    const index = this.getModel().getModel().drawables.ids.indexOf(id);
+    return index < 0 ? undefined : this.boundsOfDrawable(index);
+  }
+
+  private boundsOfDrawable(index: number): Bounds | undefined {
+    const bounds = boundsOf(this.getModel().getDrawableVertices(index));
+    // The model matrix only scales and translates, so the corners map to corners.
+    const matrix = this.getModelMatrix();
+    return (
+      bounds && {
+        left: matrix.transformX(bounds.left),
+        right: matrix.transformX(bounds.right),
+        bottom: matrix.transformY(bounds.bottom),
+        top: matrix.transformY(bounds.top),
+      }
+    );
+  }
+
+  /** Whether the idle motion playing now blinks by itself. */
+  get motionBlinks(): boolean {
+    return this.idle?.blinks ?? false;
+  }
+
+  /**
+   * Plays the motions (life layer 1) on the default pose. Every frame starts from the
+   * defaults, so the layers written on top before `update` do not accumulate and a motion
+   * fades in from, and back out to, the rest pose rather than freezing where it stopped.
+   * `quiet` fades the idle motion out, e.g. while a preset plays.
+   */
+  updateMotion(deltaSeconds: number, quiet: boolean): void {
+    const { parameters } = this.getModel().getModel();
+    parameters.values.set(parameters.defaultValues);
+    this.idle?.update(this.getModel(), deltaSeconds, quiet);
   }
 
   /** Advances physics and pose by `deltaSeconds` and applies the parameters. */
@@ -228,6 +273,8 @@ export class Live2DModel extends CubismUserModel {
   }
 
   override release(): void {
+    this.idle?.release();
+    this.idle = undefined;
     for (const texture of this.textures) {
       this.gl.deleteTexture(texture);
     }
