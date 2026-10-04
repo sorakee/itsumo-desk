@@ -2,6 +2,7 @@
   --font-ui: "Segoe UI", system-ui, sans-serif;
   --color-text: #f2f2f5;
   --color-text-muted: #a0a0ab;
+  /* Also the settings window's native background (BACKGROUND in settings_window.rs). */
   --color-surface: #2b2c33;
   --color-surface-translucent: rgb(43 44 51 / 60%);
   --color-outline: rgb(242 242 245 / 35%);

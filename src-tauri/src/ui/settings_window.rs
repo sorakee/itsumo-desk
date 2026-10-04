@@ -1,7 +1,10 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{window::Color, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tracing::warn;
 
 const LABEL: &str = "settings";
+
+/// The page's `--color-surface`, painted until the page loads so it does not flash white.
+const BACKGROUND: Color = Color(0x2b, 0x2c, 0x33, 0xff);
 
 /// Focuses the settings window, creating it if needed. It is destroyed on close rather than
 /// hidden, so it costs nothing while the user is not looking at it.
@@ -26,6 +29,7 @@ pub fn open(app: &AppHandle) {
                 .title("Itsumo Desk Settings")
                 .inner_size(880.0, 620.0)
                 .min_inner_size(640.0, 480.0)
+                .background_color(BACKGROUND)
                 .center()
                 .build();
         if let Err(error) = result {
