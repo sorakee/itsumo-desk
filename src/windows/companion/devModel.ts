@@ -3,8 +3,8 @@ import type { ModelSource } from "@/live2d/model";
 const DEFAULT_DEV_MODEL = "hiyori_pro/runtime/hiyori_pro_t11.model3.json";
 
 /**
- * In dev, the Vite server exposes the gitignored `models/` folder, so a sample model can be
- * shown before character packs exist. Production builds have no model source yet.
+ * In dev, the Vite server exposes the gitignored `models/` folder, so a sample model shows
+ * while no character is active. Production builds have no fallback.
  */
 export function devModelSource(): ModelSource | null {
   if (!import.meta.env.DEV) {

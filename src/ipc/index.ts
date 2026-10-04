@@ -3,5 +3,7 @@
 // Wrapped bindings are exported through their wrappers rather than raw.
 export * from "./app";
 export { type AppError, type AppInfo, commands } from "./bindings";
+export * from "./character";
 export * from "./companion";
+export { IpcError } from "./result";
 export * from "./window";

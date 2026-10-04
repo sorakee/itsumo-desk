@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type AppInfo, commands } from "@/ipc";
+import { CharactersSection } from "@/windows/settings/CharactersSection";
 import styles from "./SettingsApp.module.css";
 
 export function SettingsApp() {
@@ -19,7 +20,7 @@ export function SettingsApp() {
           </p>
         )}
       </header>
-      <p className={styles.empty}>Nothing to configure yet.</p>
+      <CharactersSection />
     </main>
   );
 }

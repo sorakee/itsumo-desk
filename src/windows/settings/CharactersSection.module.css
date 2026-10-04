@@ -1,0 +1,52 @@
+.section {
+  margin-top: 32px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.importButtons {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.list {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+  list-style: none;
+}
+
+.empty {
+  margin: 16px 0 0;
+  padding: 24px;
+  border: 1px dashed var(--color-divider);
+  border-radius: var(--radius-card);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}

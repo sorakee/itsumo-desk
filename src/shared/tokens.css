@@ -5,8 +5,17 @@
   /* Also the settings window's native background (BACKGROUND in settings_window.rs). */
   --color-surface: #2b2c33;
   --color-surface-translucent: rgb(43 44 51 / 60%);
+  --color-surface-raised: #34353d;
+  --color-surface-sunken: #23242a;
   --color-outline: rgb(242 242 245 / 35%);
+  --color-divider: rgb(242 242 245 / 10%);
   --color-accent: #2f8fdd;
+  --color-accent-hover: #4a9fe4;
+  --color-danger: #e5534b;
+  --color-warning: #e3b341;
+  --color-backdrop: rgb(15 15 20 / 65%);
+  --radius-control: 6px;
+  --radius-card: 10px;
 
   /* Comic pastel palette for the companion's own UI (D41). */
   --comic-ink: #1d2242;
