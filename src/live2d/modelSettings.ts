@@ -228,3 +228,50 @@ export function parseModelSettings(json: unknown): ModelSettings {
     userData: safeRelativePath(refs.UserData),
   };
 }
+
+/**
+ * Expressions and motions a character pack adds to its model (`modelExtras` in
+ * `character.json`), for exports such as VTube Studio's that leave them out of
+ * `model3.json`. Paths are relative to the `model3.json`.
+ */
+export interface ModelExtras {
+  expressions: { name: string; file: string }[];
+  motionGroups: { name: string; motions: { file: string }[] }[];
+}
+
+/**
+ * Merges a pack's extras into the parsed `model3.json`. The model's own entries win: an
+ * expression name or a motion file it already has is not added twice.
+ */
+export function withExtras(
+  settings: ModelSettings,
+  extras: ModelExtras | undefined,
+): ModelSettings {
+  if (!extras) {
+    return settings;
+  }
+  const expressions = [...settings.expressions];
+  const names = new Set(expressions.map((e) => e.name));
+  for (const { name, file } of extras.expressions) {
+    const path = safeRelativePath(file);
+    if (path === undefined || name.trim() === "" || names.has(name)) continue;
+    names.add(name);
+    expressions.push({ name, file: path });
+  }
+
+  const motionGroups = settings.motionGroups.map((g) => ({ ...g, motions: [...g.motions] }));
+  for (const group of extras.motionGroups) {
+    const motions = group.motions
+      .map((m) => safeRelativePath(m.file))
+      .filter((file) => file !== undefined)
+      .map((file) => ({ file }));
+    const existing = motionGroups.find((g) => g.name === group.name);
+    if (existing) {
+      const known = new Set(existing.motions.map((m) => m.file));
+      existing.motions.push(...motions.filter((m) => !known.has(m.file)));
+    } else if (motions.length > 0) {
+      motionGroups.push({ name: group.name, motions });
+    }
+  }
+  return { ...settings, expressions, motionGroups };
+}

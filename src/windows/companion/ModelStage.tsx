@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadFraming } from "@/ipc";
 import type { ModelSource } from "@/live2d/model";
 import { createStage, isAbortError, type Stage } from "@/live2d/stage";
+import { errorMessage } from "@/shared/errorMessage";
 import { startDevShortcuts } from "@/windows/companion/devShortcuts";
 import { startInteraction } from "@/windows/companion/interaction";
 import styles from "./ModelStage.module.css";
@@ -13,12 +14,9 @@ export type StageStatus =
   | { kind: "error"; message: string };
 
 interface ModelStageProps {
-  source: ModelSource | null;
+  /** Null shows nothing; undefined means the source is not known yet. */
+  source: ModelSource | null | undefined;
   onStatusChange: (status: StageStatus) => void;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** Hosts the Live2D canvas. The stage itself lives outside React; see `@/live2d/stage`. */
@@ -49,7 +47,7 @@ export function ModelStage({ source, onStatusChange }: ModelStageProps) {
   }, [onStatusChange]);
 
   useEffect(() => {
-    if (!stage) return;
+    if (!stage || source === undefined) return;
     if (!source) {
       onStatusChange({ kind: "empty" });
       return;

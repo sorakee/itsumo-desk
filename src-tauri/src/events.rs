@@ -5,6 +5,8 @@ use serde::Serialize;
 use specta::Type;
 use tauri_specta::Event;
 
+use crate::character::ActiveCharacter;
+
 /// The global cursor, relative to the companion's client area in CSS pixels. Values outside
 /// the window's size mean the cursor is elsewhere on the desktop.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Type, Event)]
@@ -24,3 +26,13 @@ pub struct AlwaysOnTopChanged {
 /// and forget the saved one.
 #[derive(Debug, Clone, Copy, Serialize, Type, Event)]
 pub struct ResetFraming;
+
+/// The active character changed, was replaced by a re-import, or was removed (`None`).
+#[derive(Debug, Clone, Serialize, Type, Event)]
+pub struct ActiveCharacterChanged {
+    pub character: Option<ActiveCharacter>,
+}
+
+/// A character was installed or removed.
+#[derive(Debug, Clone, Copy, Serialize, Type, Event)]
+pub struct CharactersChanged;

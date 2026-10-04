@@ -10,10 +10,18 @@ pub enum AppError {
     InvalidArgument(String),
     #[error("window operation failed: {0}")]
     Window(String),
+    #[error("{0}")]
+    Character(String),
 }
 
 impl From<tauri::Error> for AppError {
     fn from(error: tauri::Error) -> Self {
         Self::Window(error.to_string())
+    }
+}
+
+impl From<crate::character::CharacterError> for AppError {
+    fn from(error: crate::character::CharacterError) -> Self {
+        Self::Character(error.to_string())
     }
 }

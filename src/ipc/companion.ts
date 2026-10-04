@@ -1,5 +1,6 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { type AppError, commands, events, type Framing as WireFraming } from "./bindings";
+import { commands, events, type Framing as WireFraming } from "./bindings";
+import { unwrap } from "./result";
 
 // Specta types every float as `number | null` because JSON has no NaN or Infinity. The core
 // only sends finite numbers, so the wrappers below drop anything else.
@@ -9,24 +10,6 @@ type Finite<T> = { [K in keyof T]-?: Exclude<T[K], null | undefined> };
 export type CursorPosition = { x: number; y: number };
 
 export type Framing = Finite<WireFraming>;
-
-export class IpcError extends Error {
-  override name = "IpcError";
-
-  constructor(readonly error: AppError) {
-    super(error.message);
-  }
-}
-
-type Result<T> = { status: "ok"; data: T } | { status: "error"; error: AppError };
-
-async function unwrap<T>(result: Promise<Result<T>>): Promise<T> {
-  const settled = await result;
-  if (settled.status === "error") {
-    throw new IpcError(settled.error);
-  }
-  return settled.data;
-}
 
 /** Subscribes to the global cursor position, which the core polls for this window. */
 export function onCursorMoved(handler: (position: CursorPosition) => void): Promise<UnlistenFn> {
