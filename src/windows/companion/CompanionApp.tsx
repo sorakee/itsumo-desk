@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { syncCompanionStore } from "@/stores/companion";
+import { useMenuStore } from "@/stores/menu";
+import { CompanionMenu } from "@/windows/companion/CompanionMenu";
 import { devModelSource } from "@/windows/companion/devModel";
 import { HIT_REGION_ATTRIBUTE } from "@/windows/companion/interaction";
 import { ModelStage, type StageStatus } from "@/windows/companion/ModelStage";
@@ -23,7 +26,10 @@ function statusText(status: StageStatus): string | null {
 
 export function CompanionApp() {
   const [status, setStatus] = useState<StageStatus>({ kind: "loading" });
+  const menuAnchor = useMenuStore((state) => state.anchor);
   const text = statusText(status);
+
+  useEffect(() => syncCompanionStore(), []);
 
   return (
     <main className={styles.stage}>
@@ -34,6 +40,7 @@ export function CompanionApp() {
           {status.kind === "error" && <p className={styles.detail}>{status.message}</p>}
         </div>
       )}
+      {menuAnchor && <CompanionMenu key={`${menuAnchor.x},${menuAnchor.y}`} anchor={menuAnchor} />}
     </main>
   );
 }

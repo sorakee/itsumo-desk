@@ -12,6 +12,7 @@ import {
   startWindowDrag,
 } from "@/ipc";
 import type { Stage } from "@/live2d/stage";
+import { useMenuStore } from "@/stores/menu";
 
 /** Elements with this attribute catch clicks the way the model does. */
 export const HIT_REGION_ATTRIBUTE = "data-hit-region";
@@ -152,6 +153,22 @@ export function startInteraction(stage: Stage | null): () => void {
     endPress();
   }
 
+  function onContextMenu(event: MouseEvent) {
+    // The webview's own menu (reload, inspect) never belongs on the companion.
+    event.preventDefault();
+    const menu = useMenuStore.getState();
+    // While the menu is open its backdrop is the hit region, so only the model counts.
+    const onRegion =
+      menu.anchor === null &&
+      event.target instanceof Element &&
+      event.target.closest(`[${HIT_REGION_ATTRIBUTE}]`) !== null;
+    if (overModel || onRegion) {
+      menu.open({ x: event.clientX, y: event.clientY });
+    } else {
+      menu.close();
+    }
+  }
+
   function flushScale() {
     scaleFrame = undefined;
     const factor = pendingScale;
@@ -185,6 +202,7 @@ export function startInteraction(stage: Stage | null): () => void {
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
   window.addEventListener("wheel", onWheel, { passive: false });
+  window.addEventListener("contextmenu", onContextMenu);
 
   return () => {
     for (const subscription of subscriptions) {
@@ -196,6 +214,7 @@ export function startInteraction(stage: Stage | null): () => void {
     window.removeEventListener("pointerup", onPointerUp);
     window.removeEventListener("pointercancel", onPointerUp);
     window.removeEventListener("wheel", onWheel);
+    window.removeEventListener("contextmenu", onContextMenu);
     if (scaleFrame !== undefined) cancelAnimationFrame(scaleFrame);
     if (saveTimer !== undefined) saveFramingNow();
   };

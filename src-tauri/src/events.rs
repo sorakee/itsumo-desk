@@ -13,6 +13,13 @@ pub struct CursorMoved {
     pub y: f64,
 }
 
+/// The companion's always-on-top setting changed, from the tray or the companion menu.
+#[derive(Debug, Clone, Copy, Serialize, Type, Event)]
+#[serde(rename_all = "camelCase")]
+pub struct AlwaysOnTopChanged {
+    pub always_on_top: bool,
+}
+
 /// The user asked to reset the companion (tray menu): restore the model's default framing
 /// and forget the saved one.
 #[derive(Debug, Clone, Copy, Serialize, Type, Event)]

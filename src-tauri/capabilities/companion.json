@@ -3,5 +3,5 @@
   "identifier": "companion",
   "description": "Capability for the companion window",
   "windows": ["companion"],
-  "permissions": ["core:default", "core:window:allow-start-dragging"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "core:window:allow-set-focus"]
 }

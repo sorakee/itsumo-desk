@@ -65,6 +65,25 @@ export async function clearFraming(character: string): Promise<void> {
   await unwrap(commands.clearCharacterFraming(character));
 }
 
+/** Whether the companion stays above other windows. */
+export async function alwaysOnTop(): Promise<boolean> {
+  return commands.alwaysOnTop();
+}
+
+export async function setAlwaysOnTop(enabled: boolean): Promise<void> {
+  await commands.setAlwaysOnTop(enabled);
+}
+
+/** Subscribes to always-on-top changes, whether made from the tray or the companion menu. */
+export function onAlwaysOnTopChanged(handler: (enabled: boolean) => void): Promise<UnlistenFn> {
+  return events.alwaysOnTopChanged.listen(({ payload }) => handler(payload.alwaysOnTop));
+}
+
+/** Hides the companion to the tray. */
+export async function hideCompanion(): Promise<void> {
+  await commands.hideCompanion();
+}
+
 /** Subscribes to the user's request (tray menu) to reset the companion's framing. */
 export function onResetFraming(handler: () => void): Promise<UnlistenFn> {
   return events.resetFraming.listen(() => handler());
