@@ -37,7 +37,32 @@ describe("buildManifest", () => {
       motionGroups: [{ name: "Idle", motions: ["m1.json", "m2.json"] }],
       hitAreas: [{ id: "HitAreaHead", name: "Head" }],
       standardParameters: ["ParamAngleX", "ParamEyeLOpen"],
+      eyeBlinkIds: ["ParamEyeLOpen"],
+      lipSyncIds: [],
     });
+  });
+
+  it("takes blink and lip-sync parameters from the model's groups", () => {
+    const manifest = buildManifest({
+      settings: {
+        ...settings,
+        groups: [
+          { name: "EyeBlink", ids: ["EyeL", "EyeR", "EyeMissing", "EyeL"] },
+          { name: "LipSync", ids: ["Missing"] },
+        ],
+      },
+      parameters: ["EyeL", "EyeR", "ParamMouthOpenY", "ParamEyeLOpen"].map((id) => ({
+        id,
+        min: 0,
+        max: 1,
+        default: 0,
+      })),
+      drawableIds: new Set(),
+    });
+
+    expect(manifest.eyeBlinkIds).toEqual(["EyeL", "EyeR"]);
+    // A group whose IDs are all missing falls back to the standard parameter.
+    expect(manifest.lipSyncIds).toEqual(["ParamMouthOpenY"]);
   });
 });
 

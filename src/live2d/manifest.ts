@@ -41,11 +41,34 @@ export interface ParameterInfo extends MocParameter {
 }
 
 export interface ModelManifest {
+  /** In moc order: a parameter's position is its index in the Core. */
   parameters: ParameterInfo[];
   expressions: string[];
   motionGroups: { name: string; motions: string[] }[];
   hitAreas: { id: string; name: string }[];
   standardParameters: StandardParameter[];
+  /** What blinking closes: model3.json's `EyeBlink` group, else the standard eye-open pair. */
+  eyeBlinkIds: string[];
+  /** What opens the mouth: the `LipSync` group, else `ParamMouthOpenY`. */
+  lipSyncIds: string[];
+}
+
+const DEFAULT_EYE_BLINK_IDS = ["ParamEyeLOpen", "ParamEyeROpen"];
+const DEFAULT_LIP_SYNC_IDS = ["ParamMouthOpenY"];
+
+/** The model's own group if any of its IDs exist, otherwise the standard IDs it has. */
+function effectIds(
+  settings: ModelSettings,
+  group: string,
+  fallback: string[],
+  parameterIds: ReadonlySet<string>,
+): string[] {
+  const declared = settings.groups
+    .filter((g) => g.name === group)
+    .flatMap((g) => g.ids)
+    .filter((id) => parameterIds.has(id));
+  const ids = declared.length > 0 ? declared : fallback.filter((id) => parameterIds.has(id));
+  return [...new Set(ids)];
 }
 
 /** Reads parameter display names from a `cdi3.json`, ignoring anything malformed. */
@@ -97,5 +120,7 @@ export function buildManifest({
       .filter((h) => drawableIds.has(h.id))
       .map((h) => ({ id: h.id, name: h.name })),
     standardParameters: STANDARD_PARAMETERS.filter((id) => parameterIds.has(id)),
+    eyeBlinkIds: effectIds(settings, "EyeBlink", DEFAULT_EYE_BLINK_IDS, parameterIds),
+    lipSyncIds: effectIds(settings, "LipSync", DEFAULT_LIP_SYNC_IDS, parameterIds),
   };
 }

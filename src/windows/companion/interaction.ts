@@ -64,6 +64,7 @@ export function startInteraction(stage: Stage | null): () => void {
     overHitRegion =
       inside && document.elementFromPoint(x, y)?.closest(`[${HIT_REGION_ATTRIBUTE}]`) != null;
     stage?.setPointer(inside ? { x, y } : null);
+    stage?.setCursor({ x, y });
     report();
   }
 
