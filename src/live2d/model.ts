@@ -2,18 +2,27 @@
 
 import { CubismMatrix44 } from "@cubism/framework/math/cubismmatrix44";
 import { CubismMoc } from "@cubism/framework/model/cubismmoc";
+import type { CubismModel } from "@cubism/framework/model/cubismmodel";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
-import { CUBISM_SHADER_PATH } from "@/live2d/cubism";
+import { CUBISM_SHADER_PATH, startCubism } from "@/live2d/cubism";
 import { type Bounds, boundsOf } from "@/live2d/framing";
 import { createClip, IdleLoop, idleGroup } from "@/live2d/idleMotion";
 import { buildManifest, type ModelManifest, parseDisplayNames } from "@/live2d/manifest";
-import { type ModelLayout, parseModelSettings } from "@/live2d/modelSettings";
+import {
+  type ModelExtras,
+  type ModelLayout,
+  type ModelSettings,
+  parseModelSettings,
+  withExtras,
+} from "@/live2d/modelSettings";
 
 /** Where a model lives: the URL of its `model3.json`. Other files resolve relative to it. */
 export interface ModelSource {
   /** Identifies the character for per-character settings such as framing. */
   id: string;
   url: string;
+  /** Expressions and motions the character pack adds to the model. */
+  extras?: ModelExtras;
 }
 
 // Drawables fainter than this do not count towards the model's visible extent.
@@ -80,6 +89,64 @@ function createTexture(gl: WebGL2RenderingContext, bitmap: ImageBitmap): WebGLTe
   return texture;
 }
 
+async function fetchSettings(source: ModelSource, signal: AbortSignal): Promise<ModelSettings> {
+  const json: unknown = await (await fetchOk(source.url, signal)).json();
+  return withExtras(parseModelSettings(json), source.extras);
+}
+
+/** Reads the manifest from a moc the Core has loaded. */
+function manifestOf(
+  settings: ModelSettings,
+  core: Live2DCubismCore.Model,
+  displayInfo: unknown,
+): ModelManifest {
+  const { parameters, drawables } = core;
+  return buildManifest({
+    settings,
+    parameters: parameters.ids.map((id, i) => ({
+      id,
+      min: parameters.minimumValues[i] ?? 0,
+      max: parameters.maximumValues[i] ?? 0,
+      default: parameters.defaultValues[i] ?? 0,
+    })),
+    drawableIds: new Set(drawables.ids),
+    displayNames: parseDisplayNames(displayInfo),
+  });
+}
+
+/**
+ * Builds a model's manifest without rendering it (no textures, no WebGL), e.g. to validate
+ * an import.
+ */
+export async function inspectModel(
+  source: ModelSource,
+  signal: AbortSignal,
+): Promise<ModelManifest> {
+  await startCubism();
+  const settings = await fetchSettings(source, signal);
+  const at = (path: string | undefined) => (path === undefined ? undefined : resolve(source, path));
+  const [moc, displayInfo] = await Promise.all([
+    fetchBytes(resolve(source, settings.moc), signal),
+    fetchOptional(at(settings.displayInfo), signal, (r) => r.json()),
+  ]);
+  signal.throwIfAborted();
+  // The Framework's declarations are compiled without strictNullChecks; both can be null.
+  const cubismMoc: CubismMoc | null = CubismMoc.create(moc, true);
+  if (!cubismMoc) {
+    throw mocError(moc);
+  }
+  const model: CubismModel | null = cubismMoc.createModel();
+  try {
+    if (!model) {
+      throw mocError(moc);
+    }
+    return manifestOf(settings, model.getModel(), displayInfo);
+  } finally {
+    if (model) cubismMoc.deleteModel(model);
+    CubismMoc.delete(cubismMoc);
+  }
+}
+
 export interface LoadedModel {
   model: Live2DModel;
   manifest: ModelManifest;
@@ -107,7 +174,7 @@ export class Live2DModel extends CubismUserModel {
     source: ModelSource,
     signal: AbortSignal,
   ): Promise<LoadedModel> {
-    const settings = parseModelSettings(await (await fetchOk(source.url, signal)).json());
+    const settings = await fetchSettings(source, signal);
     const at = (path: string | undefined) =>
       path === undefined ? undefined : resolve(source, path);
 
@@ -132,18 +199,7 @@ export class Live2DModel extends CubismUserModel {
       if (!model.getModel()) {
         throw mocError(moc);
       }
-      const { parameters, drawables } = model.getModel().getModel();
-      const manifest = buildManifest({
-        settings,
-        parameters: parameters.ids.map((id, i) => ({
-          id,
-          min: parameters.minimumValues[i] ?? 0,
-          max: parameters.maximumValues[i] ?? 0,
-          default: parameters.defaultValues[i] ?? 0,
-        })),
-        drawableIds: new Set(drawables.ids),
-        displayNames: parseDisplayNames(displayInfo),
-      });
+      const manifest = manifestOf(settings, model.getModel().getModel(), displayInfo);
       model.centerCanvas();
       model.layout = settings.layout;
       model.idle = new IdleLoop(

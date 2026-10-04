@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ModelSettingsError, parseModelSettings, safeRelativePath } from "@/live2d/modelSettings";
+import {
+  ModelSettingsError,
+  parseModelSettings,
+  safeRelativePath,
+  withExtras,
+} from "@/live2d/modelSettings";
 
 function model(fileReferences: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   return {
@@ -140,5 +145,43 @@ describe("parseModelSettings", () => {
   it("treats a Layout with nothing usable as absent", () => {
     expect(parseModelSettings(model({}, { Layout: { Foo: 1 } })).layout).toBeUndefined();
     expect(parseModelSettings(model({}, { Layout: [1, 2] })).layout).toBeUndefined();
+  });
+});
+
+describe("withExtras", () => {
+  const base = parseModelSettings(
+    model({
+      Expressions: [{ Name: "smile", File: "smile.exp3.json" }],
+      Motions: { Idle: [{ File: "idle.motion3.json" }] },
+    }),
+  );
+
+  it("returns the settings unchanged without extras", () => {
+    expect(withExtras(base, undefined)).toBe(base);
+  });
+
+  it("adds expressions and motion groups the model lacks", () => {
+    const merged = withExtras(base, {
+      expressions: [
+        { name: "害羞脸", file: "害羞脸.exp3.json" },
+        { name: "smile", file: "other.exp3.json" },
+        { name: "escape", file: "../x.exp3.json" },
+      ],
+      motionGroups: [
+        { name: "招手", motions: [{ file: "招手.motion3.json" }] },
+        { name: "Idle", motions: [{ file: "idle.motion3.json" }, { file: "IDLE2.motion3.json" }] },
+        { name: "Empty", motions: [{ file: "/abs.motion3.json" }] },
+      ],
+    });
+    expect(merged.expressions).toEqual([
+      { name: "smile", file: "smile.exp3.json" },
+      { name: "害羞脸", file: "害羞脸.exp3.json" },
+    ]);
+    expect(merged.motionGroups).toEqual([
+      { name: "Idle", motions: [{ file: "idle.motion3.json" }, { file: "IDLE2.motion3.json" }] },
+      { name: "招手", motions: [{ file: "招手.motion3.json" }] },
+    ]);
+    // The parsed settings are not mutated.
+    expect(base.motionGroups[0]?.motions).toHaveLength(1);
   });
 });
