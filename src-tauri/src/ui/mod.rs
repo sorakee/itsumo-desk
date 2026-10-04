@@ -8,7 +8,11 @@ mod tray;
 
 use tauri::{AppHandle, Window, WindowEvent};
 
-pub use companion::{framing, save_framing, scale_by as scale_companion, set_click_through};
+pub use companion::{
+    always_on_top, framing, save_framing, scale_by as scale_companion, set_always_on_top,
+    set_click_through,
+};
+pub use settings_window::open as open_settings;
 
 use crate::platform::SystemCursor;
 
@@ -22,6 +26,10 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 /// Called when a second instance is launched: surface the running companion instead.
 pub fn show_companion(app: &AppHandle) {
     companion::set_visible(app, true);
+}
+
+pub fn hide_companion(app: &AppHandle) {
+    companion::set_visible(app, false);
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {

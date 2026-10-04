@@ -19,6 +19,25 @@ pub fn set_click_through(app: AppHandle, enabled: bool) -> Result<(), AppError> 
     Ok(ui::set_click_through(&app, enabled)?)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub fn always_on_top(app: AppHandle) -> bool {
+    ui::always_on_top(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_always_on_top(app: AppHandle, enabled: bool) {
+    ui::set_always_on_top(&app, enabled);
+}
+
+/// Hides the companion to the tray.
+#[tauri::command]
+#[specta::specta]
+pub fn hide_companion(app: AppHandle) {
+    ui::hide_companion(&app);
+}
+
 /// Multiplies the companion's size by `factor`; the result is clamped to the allowed range.
 #[tauri::command]
 #[specta::specta]

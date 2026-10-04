@@ -6,6 +6,12 @@ import * as __TAURI_EVENT from "@tauri-apps/api/event";
 /** Commands */
 export const commands = {
 	appInfo: () => __TAURI_INVOKE<AppInfo>("app_info"),
+	/**  Opens the settings window, or focuses it if it is already open. */
+	openSettings: () => __TAURI_INVOKE<void>("open_settings"),
+	alwaysOnTop: () => __TAURI_INVOKE<boolean>("always_on_top"),
+	setAlwaysOnTop: (enabled: boolean) => __TAURI_INVOKE<void>("set_always_on_top", { enabled }),
+	/**  Hides the companion to the tray. */
+	hideCompanion: () => __TAURI_INVOKE<void>("hide_companion"),
 	setClickThrough: (enabled: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_click_through", { enabled })),
 	/**  Multiplies the companion's size by `factor`; the result is clamped to the allowed range. */
 	scaleCompanion: (factor: number | null) => typedError<null, AppError>(__TAURI_INVOKE("scale_companion", { factor })),
@@ -28,11 +34,17 @@ export const commands = {
 
 /** Events */
 export const events = {
+	alwaysOnTopChanged: makeEvent<AlwaysOnTopChanged>("always-on-top-changed"),
 	cursorMoved: makeEvent<CursorMoved>("cursor-moved"),
 	resetFraming: makeEvent<ResetFraming>("reset-framing"),
 };
 
 /* Types */
+/**  The companion's always-on-top setting changed, from the tray or the companion menu. */
+export type AlwaysOnTopChanged = {
+	alwaysOnTop: boolean,
+};
+
 /**
  *  The one error type that crosses IPC. Module errors convert into it at the command
  *  boundary; messages must never carry secrets.

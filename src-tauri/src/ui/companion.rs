@@ -12,7 +12,7 @@ use super::{
     tray,
 };
 use crate::{
-    events::ResetFraming,
+    events::{AlwaysOnTopChanged, ResetFraming},
     platform::{NativeWindow, ScreenPoint},
     settings::{self, Framing, SettingsStore, WindowPosition},
 };
@@ -76,17 +76,32 @@ pub fn is_visible(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+pub fn always_on_top(app: &AppHandle) -> bool {
+    app.state::<SettingsStore>().get().companion.always_on_top
+}
+
 pub fn set_always_on_top(app: &AppHandle, always_on_top: bool) {
     if let Some(window) = app.get_webview_window(LABEL) {
         if let Err(error) = window.set_always_on_top(always_on_top) {
             warn!(%error, "failed to change always-on-top");
-            tray::sync(app);
+            sync_always_on_top(app);
             return;
         }
     }
     app.state::<SettingsStore>()
         .update(|settings| settings.companion.always_on_top = always_on_top);
+    sync_always_on_top(app);
+}
+
+/// Brings the tray menu and the companion menu in line with the saved setting.
+fn sync_always_on_top(app: &AppHandle) {
     tray::sync(app);
+    let event = AlwaysOnTopChanged {
+        always_on_top: always_on_top(app),
+    };
+    if let Err(error) = event.emit_to(app, LABEL) {
+        warn!(%error, "failed to report always-on-top");
+    }
 }
 
 /// Lets clicks pass through the window (`true`) or makes it interactive. The frontend

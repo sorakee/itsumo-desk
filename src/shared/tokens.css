@@ -7,6 +7,15 @@
   --color-outline: rgb(242 242 245 / 35%);
   --color-accent: #2f8fdd;
 
+  /* Comic pastel palette for the companion's own UI (D41). */
+  --comic-ink: #1d2242;
+  --comic-paper: #fffdf6;
+  --comic-coral: #ef6461;
+  --comic-teal: #2f8a96;
+  --comic-orange: #f47b20;
+  --comic-yellow: #f2d97a;
+  --comic-shadow: rgb(29 34 66 / 45%);
+
   font-family: var(--font-ui);
   color: var(--color-text);
 }
