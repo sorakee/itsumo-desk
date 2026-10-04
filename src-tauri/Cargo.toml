@@ -29,6 +29,12 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 tauri-plugin-single-instance = "2"
 tokio = { version = "1", features = ["sync", "time"] }
+# Native folder and file pickers for character import, opened by the core.
+tauri-plugin-dialog = "2"
+# Zip import only reads deflate (and stored) entries.
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Already in the tree through Tauri; encodes and decodes character-pack URLs.
+percent-encoding = "2"
 
 [target.'cfg(windows)'.dependencies]
 # Already in the tree through Tauri at this version; used directly by `platform/windows`.

@@ -30,16 +30,66 @@ export const commands = {
 	saveCharacterFraming: (character: string, framing: Framing) => typedError<null, AppError>(__TAURI_INVOKE("save_character_framing", { character, framing })),
 	/**  Forgets the saved framing for `character`, so the model's default applies again. */
 	clearCharacterFraming: (character: string) => typedError<null, AppError>(__TAURI_INVOKE("clear_character_framing", { character })),
+	/**  The installed characters, by name. */
+	listCharacters: () => typedError<CharacterSummary[], AppError>(__TAURI_INVOKE("list_characters")),
+	/**  The character the companion shows, or `None` if no character is active. */
+	activeCharacter: () => typedError<{
+	id: string,
+	name: string,
+	/**  The `model3.json`, served by the `character` URI scheme. */
+	modelUrl: string,
+	extras: ModelExtras,
+} | null, AppError>(__TAURI_INVOKE("active_character")),
+	/**  Switches the companion to an installed character, or to none. */
+	setActiveCharacter: (id: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_active_character", { id })),
+	/**  Deletes an installed character and its saved preferences. */
+	removeCharacter: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_character", { id })),
+	/**
+	 *  Lets the user pick a pack or model, then copies and validates it in staging. `None` if
+	 *  the dialog was cancelled.
+	 */
+	stageCharacterImport: (kind: ImportKind) => typedError<{
+	token: string,
+	character: CharacterSummary,
+	modelUrl: string,
+	extras: ModelExtras,
+	warnings: string[],
+} | null, AppError>(__TAURI_INVOKE("stage_character_import", { kind })),
+	/**  Checks a staged import against the manifest the webview built from its model. */
+	reviewCharacterImport: (token: string, manifest: ModelManifest) => typedError<ImportReview, AppError>(__TAURI_INVOKE("review_character_import", { token, manifest })),
+	/**
+	 *  Installs a reviewed import and makes it active. `replace` allows replacing an installed
+	 *  character with the same id.
+	 */
+	commitCharacterImport: (token: string, replace: boolean) => typedError<null, AppError>(__TAURI_INVOKE("commit_character_import", { token, replace })),
+	/**  Discards a staged import. */
+	cancelCharacterImport: (token: string) => typedError<null, AppError>(__TAURI_INVOKE("cancel_character_import", { token })),
 };
 
 /** Events */
 export const events = {
+	activeCharacterChanged: makeEvent<ActiveCharacterChanged>("active-character-changed"),
 	alwaysOnTopChanged: makeEvent<AlwaysOnTopChanged>("always-on-top-changed"),
+	charactersChanged: makeEvent<CharactersChanged>("characters-changed"),
 	cursorMoved: makeEvent<CursorMoved>("cursor-moved"),
 	resetFraming: makeEvent<ResetFraming>("reset-framing"),
 };
 
 /* Types */
+/**  What the companion needs to load the active character. */
+export type ActiveCharacter = {
+	id: string,
+	name: string,
+	/**  The `model3.json`, served by the `character` URI scheme. */
+	modelUrl: string,
+	extras: ModelExtras,
+};
+
+/**  The active character changed, was replaced by a re-import, or was removed (`None`). */
+export type ActiveCharacterChanged = {
+	character: ActiveCharacter | null,
+};
+
 /**  The companion's always-on-top setting changed, from the tray or the companion menu. */
 export type AlwaysOnTopChanged = {
 	alwaysOnTop: boolean,
@@ -49,12 +99,24 @@ export type AlwaysOnTopChanged = {
  *  The one error type that crosses IPC. Module errors convert into it at the command
  *  boundary; messages must never carry secrets.
  */
-export type AppError = { kind: "invalidArgument"; message: string } | { kind: "window"; message: string };
+export type AppError = { kind: "invalidArgument"; message: string } | { kind: "window"; message: string } | { kind: "character"; message: string };
 
 export type AppInfo = {
 	name: string,
 	version: string,
 };
+
+/**  An installed character, as listed in the settings window. */
+export type CharacterSummary = {
+	id: string,
+	name: string,
+	author: string,
+	license: string,
+	iconUrl: string | null,
+};
+
+/**  A character was installed or removed. */
+export type CharactersChanged = null;
 
 /**
  *  The global cursor, relative to the companion's client area in CSS pixels. Values outside
@@ -63,6 +125,20 @@ export type AppInfo = {
 export type CursorMoved = {
 	x: number | null,
 	y: number | null,
+};
+
+export type ExtraExpression = {
+	name: string,
+	file: string,
+};
+
+export type ExtraMotion = {
+	file: string,
+};
+
+export type ExtraMotionGroup = {
+	name: string,
+	motions: ExtraMotion[],
 };
 
 /**
@@ -80,11 +156,74 @@ export type Framing = {
 	centerY: number | null,
 };
 
+export type HitAreaInfo = {
+	id: string,
+	name: string,
+};
+
+/**  What to pick in the native dialog. */
+export type ImportKind = 
+/**  A pack folder or a model folder. */
+"folder" | 
+/**  A `.zip` or a `.model3.json`. */
+"file";
+
+/**  What the user confirms before an import is installed. */
+export type ImportReview = {
+	warnings: string[],
+	/**  The name of the installed character this import would replace. */
+	replaces: string | null,
+};
+
+/**
+ *  Expressions and motions that ship with a model but are missing from its `model3.json`,
+ *  typical of VTube Studio exports. The loader merges them into the parsed `model3.json`,
+ *  so the Live2D export itself stays untouched. Paths are relative to the `model3.json`.
+ */
+export type ModelExtras = {
+	expressions: ExtraExpression[],
+	motionGroups: ExtraMotionGroup[],
+};
+
+export type ModelManifest = {
+	/**  In moc order. */
+	parameters: ParameterInfo[],
+	expressions: string[],
+	motionGroups: MotionGroupInfo[],
+	hitAreas: HitAreaInfo[],
+	standardParameters: string[],
+	eyeBlinkIds: string[],
+	lipSyncIds: string[],
+};
+
+export type MotionGroupInfo = {
+	name: string,
+	motions: string[],
+};
+
+export type ParameterInfo = {
+	id: string,
+	min: number | null,
+	max: number | null,
+	default: number | null,
+	/**  Display name from `cdi3.json`, when the model ships one. */
+	name?: string | null,
+};
+
 /**
  *  The user asked to reset the companion (tray menu): restore the model's default framing
  *  and forget the saved one.
  */
 export type ResetFraming = null;
+
+/**  A pack copied into staging and validated, waiting for the webview to build its manifest. */
+export type StagedImport = {
+	token: string,
+	character: CharacterSummary,
+	modelUrl: string,
+	extras: ModelExtras,
+	warnings: string[],
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

@@ -13,6 +13,8 @@ use specta::Type;
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
     pub companion: CompanionSettings,
+    /// The id of the character pack the companion shows; `None` until one is imported.
+    pub active_character: Option<String>,
     /// Per-character preferences, keyed by character id.
     pub characters: BTreeMap<String, CharacterSettings>,
 }
@@ -21,6 +23,9 @@ impl Settings {
     /// Brings hand-edited or stale values back into range so nothing downstream has to.
     fn sanitized(mut self) -> Self {
         self.companion.scale = clamp_scale(self.companion.scale);
+        self.active_character = self
+            .active_character
+            .filter(|id| crate::character::is_valid_id(id));
         for character in self.characters.values_mut() {
             character.framing = character.framing.and_then(Framing::validated);
         }
