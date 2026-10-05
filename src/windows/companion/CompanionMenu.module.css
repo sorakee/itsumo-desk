@@ -111,10 +111,9 @@
   }
 }
 
-/* `scale` rather than `transform`, so the label's centring offset is not repeated here. */
+/* A keyframe `transform` replaces the label's whole transform, so it repeats the centring. */
 @keyframes bubble {
   from {
-    /* scale: 0.6; */
     transform: translate(-50%, -33.33%) scale(0.5);
     opacity: 0;
   }
