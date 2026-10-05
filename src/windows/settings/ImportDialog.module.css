@@ -23,6 +23,17 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-top: 16px;
+}
+
+.identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 .title {

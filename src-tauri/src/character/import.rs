@@ -14,6 +14,7 @@ use zip::ZipArchive;
 
 use super::{
     model3::{self, ModelFiles},
+    names,
     pack::{
         read_json, CharacterJson, ExtraExpression, ExtraMotion, ExtraMotionGroup, ModelExtras,
         CHARACTER_FILE, ICON_FILE, MODEL_SUFFIX, PERSONA_FILE,
@@ -371,9 +372,10 @@ fn wrap(model3: &Path, dest: &Path, taken: &dyn Fn(&str) -> bool) -> Result<(), 
         copy_file(&model_dir.join(icon), &dest.join(ICON_FILE), &mut budget)?;
     }
 
+    let name = names::from_stem(stem);
     let character = CharacterJson {
         id: unique_id(&slugify(stem), taken),
-        name: stem.to_owned(),
+        name: name.clone(),
         author: String::new(),
         license: String::new(),
         model: format!("{MODEL_FOLDER}/{file}"),
@@ -383,7 +385,7 @@ fn wrap(model3: &Path, dest: &Path, taken: &dyn Fn(&str) -> bool) -> Result<(), 
         .map_err(|e| CharacterError::InvalidPack(e.to_string()))?;
     fs::write(dest.join(CHARACTER_FILE), json)
         .map_err(|e| CharacterError::io(CHARACTER_FILE, e))?;
-    fs::write(dest.join(PERSONA_FILE), default_persona(stem))
+    fs::write(dest.join(PERSONA_FILE), default_persona(&name))
         .map_err(|e| CharacterError::io(PERSONA_FILE, e))?;
     Ok(())
 }
@@ -489,7 +491,7 @@ mod tests {
         let valid = pack::validate(&dest).expect("valid pack");
         let character = valid.character;
         assert_eq!(character.id, "vts-2");
-        assert_eq!(character.name, "阿库露_vts");
+        assert_eq!(character.name, "阿库露 vts");
         assert_eq!(character.model, "model/阿库露_vts.model3.json");
         let expressions: Vec<_> = character
             .extras

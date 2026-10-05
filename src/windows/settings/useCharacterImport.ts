@@ -21,13 +21,23 @@ export type ImportState =
   /** The picker is open, or the core is copying what was picked. */
   | { step: "picking" }
   | { step: "reading"; staged: StagedImport }
-  | { step: "review"; staged: StagedImport; manifest: ModelManifest; review: ImportReview }
-  | { step: "installing"; staged: StagedImport; manifest: ModelManifest; review: ImportReview }
+  | Reviewed<"review">
+  | Reviewed<"installing">
   | { step: "failed"; message: string };
+
+interface Reviewed<Step extends string> {
+  step: Step;
+  staged: StagedImport;
+  manifest: ModelManifest;
+  review: ImportReview;
+  /** What the user typed for the character's name, prefilled from the review. */
+  name: string;
+}
 
 export interface CharacterImport {
   state: ImportState;
   start: (kind: ImportKind) => void;
+  rename: (name: string) => void;
   install: () => void;
   cancel: () => void;
 }
@@ -76,7 +86,7 @@ export function useCharacterImport(): CharacterImport {
         const manifest = await inspectModel(source, controller.signal);
         const review = await reviewImport(staged.token, manifest);
         controller.signal.throwIfAborted();
-        setState({ step: "review", staged, manifest, review });
+        setState({ step: "review", staged, manifest, review, name: review.name });
       })().catch((error: unknown) => {
         if (controller.signal.aborted) return;
         discard();
@@ -88,20 +98,24 @@ export function useCharacterImport(): CharacterImport {
 
   const install = useCallback(() => {
     if (state.step !== "review") return;
-    const { staged, review } = state;
+    const { staged, review, name } = state;
     setState({ ...state, step: "installing" });
     // The core consumes the staged import whether or not the commit succeeds.
     token.current = null;
-    commitImport(staged.token, review.replaces !== null).then(
+    commitImport(staged.token, review.replaces !== null, name).then(
       () => setState({ step: "idle" }),
       (error: unknown) => setState({ step: "failed", message: errorMessage(error) }),
     );
   }, [state]);
+
+  const rename = useCallback((name: string) => {
+    setState((current) => (current.step === "review" ? { ...current, name } : current));
+  }, []);
 
   const cancel = useCallback(() => {
     discard();
     setState({ step: "idle" });
   }, [discard]);
 
-  return { state, start, install, cancel };
+  return { state, start, rename, install, cancel };
 }

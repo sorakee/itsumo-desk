@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { removeCharacter, setActiveCharacter } from "@/ipc";
+import { removeCharacter, renameCharacter, setActiveCharacter, setCharacterFavorite } from "@/ipc";
 import { errorMessage } from "@/shared/errorMessage";
 import { syncCharactersStore, useCharactersStore } from "@/stores/characters";
 import { Button } from "@/windows/settings/Button";
@@ -8,19 +8,26 @@ import { ImportDialog } from "@/windows/settings/ImportDialog";
 import { useCharacterImport } from "@/windows/settings/useCharacterImport";
 import styles from "./CharactersSection.module.css";
 
-/** Installed characters: import, switch, remove. */
+/** Installed characters: import, switch, rename, favourite, remove. */
 export function CharactersSection() {
   const characters = useCharactersStore((state) => state.characters);
   const activeId = useCharactersStore((state) => state.active?.id);
-  const { state, start, install, cancel } = useCharacterImport();
+  const { state, start, rename, install, cancel } = useCharacterImport();
   const [actionError, setActionError] = useState<string | null>(null);
   const importing = state.step !== "idle" && state.step !== "failed";
 
   useEffect(() => syncCharactersStore(), []);
 
-  function run(action: () => Promise<void>) {
+  /** Runs `action`, showing its error if it fails. Resolves to whether it succeeded. */
+  function run(action: () => Promise<void>): Promise<boolean> {
     setActionError(null);
-    action().catch((error: unknown) => setActionError(errorMessage(error)));
+    return action().then(
+      () => true,
+      (error: unknown) => {
+        setActionError(errorMessage(error));
+        return false;
+      },
+    );
   }
 
   return (
@@ -59,12 +66,16 @@ export function CharactersSection() {
                 disabled={importing}
                 onActivate={() => run(() => setActiveCharacter(character.id))}
                 onRemove={() => run(() => removeCharacter(character.id))}
+                onRename={(name) => run(() => renameCharacter(character.id, name))}
+                onToggleFavorite={() =>
+                  run(() => setCharacterFavorite(character.id, !character.favorite))
+                }
               />
             ))}
           </ul>
         ))}
 
-      <ImportDialog state={state} onInstall={install} onCancel={cancel} />
+      <ImportDialog state={state} onRename={rename} onInstall={install} onCancel={cancel} />
     </section>
   );
 }

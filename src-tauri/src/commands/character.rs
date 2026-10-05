@@ -51,6 +51,31 @@ pub async fn remove_character(app: AppHandle, id: String) -> Result<(), AppError
     Ok(character::remove(&app, id).await?)
 }
 
+/// Gives an installed character a display name, or with `None` (or a blank name) goes
+/// back to the pack's name.
+#[tauri::command]
+#[specta::specta]
+pub async fn rename_character(
+    app: AppHandle,
+    id: String,
+    name: Option<String>,
+) -> Result<(), AppError> {
+    validate_id(&id)?;
+    Ok(character::rename(&app, id, name).await?)
+}
+
+/// Marks an installed character as a favourite, or unmarks it.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_character_favorite(
+    app: AppHandle,
+    id: String,
+    favorite: bool,
+) -> Result<(), AppError> {
+    validate_id(&id)?;
+    Ok(character::set_favorite(&app, id, favorite).await?)
+}
+
 /// Lets the user pick a pack or model, then copies and validates it in staging. `None` if
 /// the dialog was cancelled.
 #[tauri::command]
@@ -75,17 +100,18 @@ pub async fn review_character_import(
     Ok(character::review(&app, token, manifest).await?)
 }
 
-/// Installs a reviewed import and makes it active. `replace` allows replacing an installed
-/// character with the same id.
+/// Installs a reviewed import under `name` and makes it active. `replace` allows replacing
+/// an installed character with the same id.
 #[tauri::command]
 #[specta::specta]
 pub async fn commit_character_import(
     app: AppHandle,
     token: String,
     replace: bool,
+    name: String,
 ) -> Result<(), AppError> {
     validate_token(&token)?;
-    Ok(character::commit(&app, token, replace).await?)
+    Ok(character::commit(&app, token, replace, name).await?)
 }
 
 /// Discards a staged import.

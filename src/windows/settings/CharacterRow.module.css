@@ -17,9 +17,81 @@
 .name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   font-weight: 600;
+}
+
+.nameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sits where the name was, its text lined up with it: 28px tall less 4px of margin is the
+   24px of the name line (the rename button's height), so the row keeps its height. */
+.nameInput {
+  height: 28px;
+  max-width: 320px;
+  margin: -2px 0 -2px -9px;
+  padding-block: 0;
+  font-weight: 600;
+}
+
+.iconButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.iconButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--color-divider);
+  color: var(--color-text);
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Shown on demand so a list of names stays quiet. */
+.rename {
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+}
+
+.row:hover .rename,
+.rename:focus-visible {
+  opacity: 1;
+}
+
+.favorite,
+.favorite:hover:not(:disabled) {
+  color: var(--color-favorite);
+}
+
+/* CSS outranks the icon's `fill="none"` attribute. */
+.favorite svg {
+  fill: currentColor;
 }
 
 .badge {

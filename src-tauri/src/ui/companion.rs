@@ -191,7 +191,7 @@ pub fn framing(app: &AppHandle, character: &str) -> Option<Framing> {
 /// Saves `framing` for `character`; `None` goes back to the model's default.
 pub fn save_framing(app: &AppHandle, character: String, framing: Option<Framing>) {
     app.state::<SettingsStore>().update(|settings| {
-        settings.characters.entry(character).or_default().framing = framing;
+        settings.update_character(&character, |c| c.framing = framing);
     });
 }
 

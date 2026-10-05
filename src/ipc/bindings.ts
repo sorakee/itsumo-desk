@@ -35,7 +35,6 @@ export const commands = {
 	/**  The character the companion shows, or `None` if no character is active. */
 	activeCharacter: () => typedError<{
 	id: string,
-	name: string,
 	/**  The `model3.json`, served by the `character` URI scheme. */
 	modelUrl: string,
 	extras: ModelExtras,
@@ -44,6 +43,13 @@ export const commands = {
 	setActiveCharacter: (id: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_active_character", { id })),
 	/**  Deletes an installed character and its saved preferences. */
 	removeCharacter: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_character", { id })),
+	/**
+	 *  Gives an installed character a display name, or with `None` (or a blank name) goes
+	 *  back to the pack's name.
+	 */
+	renameCharacter: (id: string, name: string | null) => typedError<null, AppError>(__TAURI_INVOKE("rename_character", { id, name })),
+	/**  Marks an installed character as a favourite, or unmarks it. */
+	setCharacterFavorite: (id: string, favorite: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_character_favorite", { id, favorite })),
 	/**
 	 *  Lets the user pick a pack or model, then copies and validates it in staging. `None` if
 	 *  the dialog was cancelled.
@@ -58,10 +64,10 @@ export const commands = {
 	/**  Checks a staged import against the manifest the webview built from its model. */
 	reviewCharacterImport: (token: string, manifest: ModelManifest) => typedError<ImportReview, AppError>(__TAURI_INVOKE("review_character_import", { token, manifest })),
 	/**
-	 *  Installs a reviewed import and makes it active. `replace` allows replacing an installed
-	 *  character with the same id.
+	 *  Installs a reviewed import under `name` and makes it active. `replace` allows replacing
+	 *  an installed character with the same id.
 	 */
-	commitCharacterImport: (token: string, replace: boolean) => typedError<null, AppError>(__TAURI_INVOKE("commit_character_import", { token, replace })),
+	commitCharacterImport: (token: string, replace: boolean, name: string) => typedError<null, AppError>(__TAURI_INVOKE("commit_character_import", { token, replace, name })),
 	/**  Discards a staged import. */
 	cancelCharacterImport: (token: string) => typedError<null, AppError>(__TAURI_INVOKE("cancel_character_import", { token })),
 };
@@ -79,7 +85,6 @@ export const events = {
 /**  What the companion needs to load the active character. */
 export type ActiveCharacter = {
 	id: string,
-	name: string,
 	/**  The `model3.json`, served by the `character` URI scheme. */
 	modelUrl: string,
 	extras: ModelExtras,
@@ -109,7 +114,11 @@ export type AppInfo = {
 /**  An installed character, as listed in the settings window. */
 export type CharacterSummary = {
 	id: string,
+	/**  The user's alias if there is one, else the pack's name (D44). */
 	name: string,
+	/**  The name in the pack's `character.json`. */
+	packName: string,
+	favorite: boolean,
 	author: string,
 	license: string,
 	iconUrl: string | null,
@@ -173,6 +182,11 @@ export type ImportReview = {
 	warnings: string[],
 	/**  The name of the installed character this import would replace. */
 	replaces: string | null,
+	/**
+	 *  The name to offer for the character: the replaced one's alias if it has one, so
+	 *  replacing keeps it, else the pack's name.
+	 */
+	name: string,
 };
 
 /**

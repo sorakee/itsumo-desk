@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { CharacterSummary } from "@/ipc";
 import { characterRing } from "@/windows/companion/characterRing";
 
-function installed(count: number): CharacterSummary[] {
+function installed(count: number, favorites: readonly number[] = []): CharacterSummary[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `c${index}`,
     name: `Character ${index}`,
+    packName: `Character ${index}`,
+    favorite: favorites.includes(index),
     author: "",
     license: "",
     iconUrl: null,
@@ -39,6 +41,22 @@ describe("characterRing", () => {
   it("ignores an active id that is not installed", () => {
     const ring = characterRing(installed(9), "gone", 7);
     expect(ids(ring.shown)).toEqual(["c0", "c1", "c2", "c3", "c4", "c5", "c6"]);
+  });
+
+  it("puts favourites first, keeping the order within each group", () => {
+    const ring = characterRing(installed(4, [3, 1]), "c0", 7);
+    expect(ids(ring.shown)).toEqual(["c1", "c3", "c0", "c2"]);
+  });
+
+  it("lets favourites decide who fits", () => {
+    const ring = characterRing(installed(9, [8, 7]), null, 7);
+    expect(ids(ring.shown)).toEqual(["c7", "c8", "c0", "c1", "c2", "c3", "c4"]);
+    expect(ring.overflow).toBe(true);
+  });
+
+  it("still makes room for a left-out active character after the favourites", () => {
+    const ring = characterRing(installed(9, [8]), "c7", 7);
+    expect(ids(ring.shown)).toEqual(["c8", "c0", "c1", "c2", "c3", "c4", "c7"]);
   });
 
   it("does not change the list it was given", () => {
