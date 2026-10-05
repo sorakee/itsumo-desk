@@ -199,6 +199,26 @@ mod tests {
     }
 
     #[test]
+    fn invalid_display_names_and_empty_entries_are_dropped_on_load() {
+        let dir = TempDir::new("names");
+        fs::write(
+            dir.config(),
+            r#"{"characters":{
+                "a":{"displayName":"  Ai  ","favorite":true},
+                "b":{"displayName":"two\nlines"},
+                "c":{"framing":null}
+            }}"#,
+        )
+        .expect("write config");
+
+        let settings = load(&dir.config());
+        assert_eq!(settings.characters["a"].display_name.as_deref(), Some("Ai"));
+        assert!(settings.characters["a"].favorite);
+        assert!(!settings.characters.contains_key("b"));
+        assert!(!settings.characters.contains_key("c"));
+    }
+
+    #[test]
     fn invalid_file_is_moved_aside() {
         let dir = TempDir::new("invalid");
         fs::write(dir.config(), "{ not json").expect("write config");

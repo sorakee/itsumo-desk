@@ -33,6 +33,16 @@ export async function removeCharacter(id: string): Promise<void> {
   await unwrap(commands.removeCharacter(id));
 }
 
+/** Gives an installed character a display name; null or a blank name restores the pack's. */
+export async function renameCharacter(id: string, name: string | null): Promise<void> {
+  await unwrap(commands.renameCharacter(id, name));
+}
+
+/** Marks an installed character as a favourite, or unmarks it. */
+export async function setCharacterFavorite(id: string, favorite: boolean): Promise<void> {
+  await unwrap(commands.setCharacterFavorite(id, favorite));
+}
+
 /**
  * Lets the user pick a pack or model in a native dialog, then copies and validates it.
  * Resolves with null if the dialog was cancelled.
@@ -50,9 +60,12 @@ export function reviewImport(token: string, manifest: ModelManifest): Promise<Im
   return unwrap(commands.reviewCharacterImport(token, manifest));
 }
 
-/** Installs a reviewed import and makes it active; `replace` replaces a same-id character. */
-export async function commitImport(token: string, replace: boolean): Promise<void> {
-  await unwrap(commands.commitCharacterImport(token, replace));
+/**
+ * Installs a reviewed import under `name` (blank keeps the pack's) and makes it active;
+ * `replace` replaces a same-id character.
+ */
+export async function commitImport(token: string, replace: boolean, name: string): Promise<void> {
+  await unwrap(commands.commitCharacterImport(token, replace, name));
 }
 
 /** Discards a staged import. */

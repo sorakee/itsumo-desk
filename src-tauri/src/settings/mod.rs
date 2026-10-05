@@ -28,8 +28,22 @@ impl Settings {
             .filter(|id| crate::character::is_valid_id(id));
         for character in self.characters.values_mut() {
             character.framing = character.framing.and_then(Framing::validated);
+            character.display_name = character
+                .display_name
+                .take()
+                .and_then(|name| crate::character::display_name(&name).ok().flatten());
         }
+        self.characters.retain(|_, character| !character.is_empty());
         self
+    }
+
+    /// Edits one character's preferences, dropping the entry once nothing in it is set.
+    pub fn update_character(&mut self, id: &str, f: impl FnOnce(&mut CharacterSettings)) {
+        let character = self.characters.entry(id.to_owned()).or_default();
+        f(character);
+        if character.is_empty() {
+            self.characters.remove(id);
+        }
     }
 }
 
@@ -76,6 +90,16 @@ pub struct WindowPosition {
 pub struct CharacterSettings {
     /// `None` until the user adjusts it; the frontend then derives a default from the model.
     pub framing: Option<Framing>,
+    /// Shown instead of the pack's name; `None` uses the pack's name (D44).
+    pub display_name: Option<String>,
+    /// Favourites come first in the companion menu's character ring.
+    pub favorite: bool,
+}
+
+impl CharacterSettings {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// Which part of the model fills the companion window, in model units (the model canvas is
@@ -138,6 +162,17 @@ mod tests {
             center_y: 0.0,
         };
         assert_eq!(broken.validated(), None);
+    }
+
+    #[test]
+    fn updating_a_character_drops_entries_left_empty() {
+        let mut settings = Settings::default();
+        settings.update_character("a", |c| c.favorite = true);
+        settings.update_character("a", |c| c.display_name = Some("A".into()));
+        settings.update_character("a", |c| c.favorite = false);
+        assert_eq!(settings.characters["a"].display_name.as_deref(), Some("A"));
+        settings.update_character("a", |c| c.display_name = None);
+        assert!(settings.characters.is_empty());
     }
 
     #[test]

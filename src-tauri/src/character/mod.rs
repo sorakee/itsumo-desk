@@ -5,6 +5,7 @@ mod library;
 mod manifest;
 mod mapping;
 mod model3;
+mod names;
 mod pack;
 mod paths;
 mod protocol;
@@ -20,6 +21,7 @@ use tracing::warn;
 
 pub use library::{is_valid_token, CharacterLibrary};
 pub use manifest::ModelManifest;
+pub use names::display_name;
 pub use pack::ModelExtras;
 pub use paths::is_valid_id;
 pub use protocol::{handle as handle_protocol, SCHEME};
@@ -51,6 +53,8 @@ pub enum CharacterError {
     UnknownImport,
     #[error("a character with the id {0} is already installed")]
     Conflict(String),
+    #[error("{0}")]
+    InvalidName(&'static str),
     #[error("background task failed: {0}")]
     Task(String),
 }
@@ -69,7 +73,11 @@ impl CharacterError {
 #[serde(rename_all = "camelCase")]
 pub struct CharacterSummary {
     pub id: String,
+    /// The user's alias if there is one, else the pack's name (D44).
     pub name: String,
+    /// The name in the pack's `character.json`.
+    pub pack_name: String,
+    pub favorite: bool,
     pub author: String,
     pub license: String,
     pub icon_url: Option<String>,
@@ -80,7 +88,6 @@ pub struct CharacterSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ActiveCharacter {
     pub id: String,
-    pub name: String,
     /// The `model3.json`, served by the `character` URI scheme.
     pub model_url: String,
     pub extras: ModelExtras,
@@ -114,6 +121,9 @@ pub struct ImportReview {
     pub warnings: Vec<String>,
     /// The name of the installed character this import would replace.
     pub replaces: Option<String>,
+    /// The name to offer for the character: the replaced one's alias if it has one, so
+    /// replacing keeps it, else the pack's name.
+    pub name: String,
 }
 
 /// Runs `f` against the library on a blocking thread: every library call touches the disk.
@@ -128,7 +138,8 @@ async fn blocking<T: Send + 'static>(
 }
 
 pub async fn list(app: &AppHandle) -> Result<Vec<CharacterSummary>, CharacterError> {
-    blocking(app, |library| Ok(library.list())).await
+    let preferences = app.state::<SettingsStore>().get().characters;
+    blocking(app, move |library| Ok(library.list(&preferences))).await
 }
 
 /// The active character, or `None` if none is set or its pack is gone.
@@ -229,14 +240,65 @@ pub async fn review(
     token: String,
     manifest: ModelManifest,
 ) -> Result<ImportReview, CharacterError> {
-    blocking(app, move |library| library.review(&token, &manifest)).await
+    let preferences = app.state::<SettingsStore>().get().characters;
+    blocking(app, move |library| {
+        library.review(&token, &manifest, &preferences)
+    })
+    .await
 }
 
-/// Installs a reviewed import and makes it the active character.
-pub async fn commit(app: &AppHandle, token: String, replace: bool) -> Result<(), CharacterError> {
-    let id = blocking(app, move |library| library.commit(&token, replace)).await?;
+/// Stores `name` as the alias of the character `id`, whose pack calls it `pack_name`. No
+/// name, or the pack's own, clears the alias.
+fn store_display_name(app: &AppHandle, id: &str, pack_name: &str, name: Option<String>) {
+    let alias = name.filter(|name| name != pack_name);
+    app.state::<SettingsStore>()
+        .update(|settings| settings.update_character(id, |c| c.display_name = alias));
+}
+
+/// Installs a reviewed import under the name the user confirmed and makes it the active
+/// character.
+pub async fn commit(
+    app: &AppHandle,
+    token: String,
+    replace: bool,
+    name: String,
+) -> Result<(), CharacterError> {
+    let name = display_name(&name).map_err(CharacterError::InvalidName)?;
+    let installed = blocking(app, move |library| library.commit(&token, replace)).await?;
+    store_display_name(app, &installed.id, &installed.name, name);
     emit_list_changed(app);
-    set_active(app, Some(id)).await
+    set_active(app, Some(installed.id)).await
+}
+
+/// Gives an installed character an alias, or with `None` (or a blank name) goes back to
+/// the pack's name.
+pub async fn rename(
+    app: &AppHandle,
+    id: String,
+    name: Option<String>,
+) -> Result<(), CharacterError> {
+    let name = match name {
+        Some(name) => display_name(&name).map_err(CharacterError::InvalidName)?,
+        None => None,
+    };
+    let looked_up = id.clone();
+    let pack_name = blocking(app, move |library| library.pack_name(&looked_up)).await?;
+    store_display_name(app, &id, &pack_name, name);
+    emit_list_changed(app);
+    Ok(())
+}
+
+pub async fn set_favorite(
+    app: &AppHandle,
+    id: String,
+    favorite: bool,
+) -> Result<(), CharacterError> {
+    let checked = id.clone();
+    blocking(app, move |library| library.pack_name(&checked)).await?;
+    app.state::<SettingsStore>()
+        .update(|settings| settings.update_character(&id, |c| c.favorite = favorite));
+    emit_list_changed(app);
+    Ok(())
 }
 
 pub async fn cancel(app: &AppHandle, token: String) -> Result<(), CharacterError> {

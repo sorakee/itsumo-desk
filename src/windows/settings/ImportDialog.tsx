@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { Button } from "@/windows/settings/Button";
 import { CharacterAvatar } from "@/windows/settings/CharacterAvatar";
+import { NameInput } from "@/windows/settings/NameInput";
 import type { ImportState } from "@/windows/settings/useCharacterImport";
 import styles from "./ImportDialog.module.css";
 
 interface ImportDialogProps {
   state: ImportState;
+  onRename: (name: string) => void;
   onInstall: () => void;
   onCancel: () => void;
 }
@@ -15,7 +17,7 @@ function plural(count: number, noun: string): string {
 }
 
 /** Shows an import from reading the model to the user's confirmation, or why it failed. */
-export function ImportDialog({ state, onInstall, onCancel }: ImportDialogProps) {
+export function ImportDialog({ state, onRename, onInstall, onCancel }: ImportDialogProps) {
   const open = state.step !== "idle" && state.step !== "picking";
   const busy = state.step === "installing";
 
@@ -63,16 +65,27 @@ export function ImportDialog({ state, onInstall, onCancel }: ImportDialogProps) 
 
         {(state.step === "review" || state.step === "installing") && (
           <>
+            <h2 id="import-title" className={styles.title}>
+              {state.review.replaces === null ? "Import a character" : "Replace a character"}
+            </h2>
             <div className={styles.heading}>
               <CharacterAvatar
-                name={state.staged.character.name}
+                name={state.name.trim() || state.staged.character.name}
                 iconUrl={state.staged.character.iconUrl}
                 size="large"
               />
-              <div>
-                <h2 id="import-title" className={styles.title}>
-                  {state.staged.character.name}
-                </h2>
+              <div className={styles.identity}>
+                <NameInput
+                  className={styles.name}
+                  aria-label="Name"
+                  value={state.name}
+                  placeholder={state.staged.character.name}
+                  disabled={busy}
+                  onChange={(event) => onRename(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") onInstall();
+                  }}
+                />
                 <p className={styles.muted}>
                   {state.staged.character.author || "Unknown author"} · id{" "}
                   <code>{state.staged.character.id}</code>

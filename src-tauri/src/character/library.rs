@@ -3,7 +3,7 @@
 //! async runtime.
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs, io,
     path::{Path, PathBuf},
     sync::{
@@ -14,6 +14,8 @@ use std::{
 };
 
 use tracing::warn;
+
+use crate::settings::CharacterSettings;
 
 use super::{
     import::{self, Source},
@@ -54,10 +56,27 @@ fn url_base(base: &[&str], relative: &str) -> String {
     protocol::url(base.iter().copied().chain(relative.split('/')))
 }
 
-fn summary(dir: &Path, base: &[&str], character: &CharacterJson, id: &str) -> CharacterSummary {
+/// The user's preferences for each character, by id.
+type Preferences = BTreeMap<String, CharacterSettings>;
+
+fn display_name(character: &CharacterJson, preferences: Option<&CharacterSettings>) -> String {
+    preferences
+        .and_then(|p| p.display_name.clone())
+        .unwrap_or_else(|| character.name.clone())
+}
+
+fn summary(
+    dir: &Path,
+    base: &[&str],
+    character: &CharacterJson,
+    id: &str,
+    preferences: Option<&CharacterSettings>,
+) -> CharacterSummary {
     CharacterSummary {
         id: id.to_owned(),
-        name: character.name.clone(),
+        name: display_name(character, preferences),
+        pack_name: character.name.clone(),
+        favorite: preferences.is_some_and(|p| p.favorite),
         author: character.author.clone(),
         license: character.license.clone(),
         icon_url: dir
@@ -124,8 +143,15 @@ impl CharacterLibrary {
         }
     }
 
-    /// Installed packs, by name. Unreadable ones are skipped.
-    pub fn list(&self) -> Vec<CharacterSummary> {
+    /// The name in an installed pack's `character.json`.
+    pub fn pack_name(&self, id: &str) -> Result<String, CharacterError> {
+        self.read_installed(id)
+            .map(|(_, character)| character.name)
+            .ok_or_else(|| CharacterError::UnknownCharacter(id.to_owned()))
+    }
+
+    /// Installed packs, by display name. Unreadable ones are skipped.
+    pub fn list(&self, preferences: &Preferences) -> Vec<CharacterSummary> {
         let entries = match fs::read_dir(&self.root) {
             Ok(entries) => entries,
             Err(error) => {
@@ -138,7 +164,7 @@ impl CharacterLibrary {
             .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
             .filter_map(|id| {
                 let (dir, character) = self.read_installed(&id)?;
-                Some(summary(&dir, &[&id], &character, &id))
+                Some(summary(&dir, &[&id], &character, &id, preferences.get(&id)))
             })
             .collect();
         characters.sort_by_cached_key(|c| (c.name.to_lowercase(), c.id.clone()));
@@ -150,7 +176,6 @@ impl CharacterLibrary {
         let (_, character) = self.read_installed(id)?;
         Some(ActiveCharacter {
             id: id.to_owned(),
-            name: character.name,
             model_url: url_base(&[id], &character.model),
             extras: character.extras,
         })
@@ -173,7 +198,7 @@ impl CharacterLibrary {
         let character = &valid.character;
         let staged = StagedImport {
             token: token.clone(),
-            character: summary(&dir, &base, character, &character.id),
+            character: summary(&dir, &base, character, &character.id, None),
             model_url: url_base(&base, &character.model),
             extras: character.extras.clone(),
             warnings: valid.warnings.clone(),
@@ -196,6 +221,7 @@ impl CharacterLibrary {
         &self,
         token: &str,
         manifest: &ModelManifest,
+        preferences: &Preferences,
     ) -> Result<ImportReview, CharacterError> {
         let json = serde_json::to_vec_pretty(manifest)
             .map_err(|e| CharacterError::InvalidPack(e.to_string()))?;
@@ -209,15 +235,23 @@ impl CharacterLibrary {
             warnings.extend(mapping::check(mapping, manifest));
         }
         entry.reviewed = true;
-        let replaces = self
+        let replaced = self
             .read_installed(&entry.character.id)
-            .map(|(_, installed)| installed.name);
-        Ok(ImportReview { warnings, replaces })
+            .map(|(_, character)| (character, preferences.get(&entry.character.id)));
+        let alias = replaced
+            .as_ref()
+            .and_then(|(_, preferences)| preferences.and_then(|p| p.display_name.clone()));
+        Ok(ImportReview {
+            warnings,
+            replaces: replaced
+                .map(|(character, preferences)| display_name(&character, preferences)),
+            name: alias.unwrap_or_else(|| entry.character.name.clone()),
+        })
     }
 
     /// Moves a reviewed import into place. An installed pack with the same id is replaced
-    /// only when `replace` is set. Returns the new pack's id.
-    pub fn commit(&self, token: &str, replace: bool) -> Result<String, CharacterError> {
+    /// only when `replace` is set. Returns the new pack's `character.json`.
+    pub fn commit(&self, token: &str, replace: bool) -> Result<CharacterJson, CharacterError> {
         let staged = self
             .staged()
             .remove(token)
@@ -227,13 +261,13 @@ impl CharacterLibrary {
             remove_quietly(&dir);
             return Err(CharacterError::UnknownImport);
         }
-        let id = staged.character.id;
-        let target = self.root.join(&id);
+        let character = staged.character;
+        let target = self.root.join(&character.id);
         let io = |e| CharacterError::io("the characters folder", e);
         if target.exists() {
             if !replace {
                 remove_quietly(&dir);
-                return Err(CharacterError::Conflict(id));
+                return Err(CharacterError::Conflict(character.id));
             }
             let old = self.root.join(STAGING).join(format!("{token}-old"));
             fs::rename(&target, &old).map_err(io)?;
@@ -247,7 +281,7 @@ impl CharacterLibrary {
         } else {
             fs::rename(&dir, &target).map_err(io)?;
         }
-        Ok(id)
+        Ok(character)
     }
 
     pub fn cancel(&self, token: &str) {
@@ -318,16 +352,16 @@ mod tests {
             .stage(&Source::File(model3.clone()))
             .expect("staged again");
         let review = library
-            .review(&staged.token, &manifest())
+            .review(&staged.token, &manifest(), &Preferences::new())
             .expect("reviewed");
         assert_eq!(review.replaces, None);
         assert_eq!(
-            library.commit(&staged.token, false).expect("committed"),
+            library.commit(&staged.token, false).expect("committed").id,
             "hiyori"
         );
         assert!(tmp.path("characters/hiyori/manifest.json").is_file());
 
-        let list = library.list();
+        let list = library.list(&Preferences::new());
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "Hiyori");
         let active = library.active("hiyori").expect("installed");
@@ -360,7 +394,7 @@ mod tests {
             .stage(&Source::Folder(source.clone()))
             .expect("staged");
         library
-            .review(&staged.token, &manifest())
+            .review(&staged.token, &manifest(), &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 
@@ -369,7 +403,7 @@ mod tests {
             .stage(&Source::Folder(source.clone()))
             .expect("staged");
         let review = library
-            .review(&staged.token, &manifest())
+            .review(&staged.token, &manifest(), &Preferences::new())
             .expect("reviewed");
         assert_eq!(review.replaces.as_deref(), Some("First"));
         assert!(matches!(
@@ -377,12 +411,60 @@ mod tests {
             Err(CharacterError::Conflict(_))
         ));
 
+        // The import offers the installed character's alias, so replacing keeps it.
+        let aliased = Preferences::from([(
+            "mine".to_owned(),
+            CharacterSettings {
+                display_name: Some("Mine".into()),
+                ..CharacterSettings::default()
+            },
+        )]);
         let staged = library.stage(&Source::Folder(source)).expect("staged");
-        library
-            .review(&staged.token, &manifest())
+        let review = library
+            .review(&staged.token, &manifest(), &aliased)
             .expect("reviewed");
+        assert_eq!(review.replaces.as_deref(), Some("Mine"));
+        assert_eq!(review.name, "Mine");
         library.commit(&staged.token, true).expect("replaced");
-        assert_eq!(library.list()[0].name, "Second");
+        assert_eq!(library.list(&Preferences::new())[0].name, "Second");
+    }
+
+    #[test]
+    fn the_list_uses_aliases_and_sorts_by_them() {
+        let tmp = TestDir::new("library-aliases");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        for stem in ["alpha", "beta"] {
+            let model3 = model_folder(&tmp.path(&format!("source-{stem}")), stem);
+            let staged = library.stage(&Source::File(model3)).expect("staged");
+            let review = library
+                .review(&staged.token, &manifest(), &Preferences::new())
+                .expect("reviewed");
+            assert_eq!(review.name, stem);
+            library.commit(&staged.token, false).expect("committed");
+        }
+        let preferences = Preferences::from([(
+            "beta".to_owned(),
+            CharacterSettings {
+                display_name: Some("Aardvark".into()),
+                favorite: true,
+                ..CharacterSettings::default()
+            },
+        )]);
+
+        let list = library.list(&preferences);
+        let names: Vec<_> = list
+            .iter()
+            .map(|c| (c.name.as_str(), c.pack_name.as_str(), c.favorite))
+            .collect();
+        assert_eq!(
+            names,
+            [("Aardvark", "beta", true), ("alpha", "alpha", false)]
+        );
+        assert_eq!(library.pack_name("beta").expect("installed"), "beta");
+        assert!(matches!(
+            library.pack_name("gamma"),
+            Err(CharacterError::UnknownCharacter(_))
+        ));
     }
 
     #[test]
@@ -393,12 +475,12 @@ mod tests {
             .stage(&Source::File(model_folder(&tmp.path("source"), "m")))
             .expect("staged");
         library
-            .review(&staged.token, &manifest())
+            .review(&staged.token, &manifest(), &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 
         library.remove("m").expect("removed");
-        assert!(library.list().is_empty());
+        assert!(library.list(&Preferences::new()).is_empty());
         assert!(!tmp.path("characters/m").exists());
         assert!(matches!(
             library.remove("m"),
