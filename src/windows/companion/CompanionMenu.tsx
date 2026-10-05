@@ -12,7 +12,8 @@ import { focusWindow } from "@/ipc";
 import { Icon } from "@/shared/Icon";
 import { type MenuAnchor, useMenuStore } from "@/stores/menu";
 import { HIT_REGION_ATTRIBUTE } from "@/windows/companion/interaction";
-import { type MenuItem, useMenuItems } from "@/windows/companion/menuItems";
+import { MenuAvatar } from "@/windows/companion/MenuAvatar";
+import { type MenuItem, type MenuPage, useMenuItems } from "@/windows/companion/menuItems";
 import {
   BUTTON_SIZE,
   buttonAt,
@@ -20,6 +21,7 @@ import {
   labelOffset,
   menuCenter,
   menuExtent,
+  type Point,
 } from "@/windows/companion/menuLayout";
 import styles from "./CompanionMenu.module.css";
 
@@ -27,20 +29,36 @@ import styles from "./CompanionMenu.module.css";
 // closes it instead of passing through to the desktop.
 const hitRegion = { [HIT_REGION_ATTRIBUTE]: true };
 
+// Character choices are radio items, so assistive tech reads which one is current.
+function roleOf(item: MenuItem) {
+  return item.checked === undefined
+    ? { role: "menuitem" }
+    : { role: "menuitemradio", "aria-checked": item.checked };
+}
+
 interface CompanionMenuProps {
   anchor: MenuAnchor;
 }
 
-/** The right-click menu (D41). Mounted only while open; remount it to reopen elsewhere. */
+/**
+ * The right-click menu (D41), with the character ring as a second page (D42). Mounted only
+ * while open; remount it to reopen elsewhere.
+ */
 export function CompanionMenu({ anchor }: CompanionMenuProps) {
-  const items = useMenuItems();
+  const [page, setPage] = useState<MenuPage>("main");
+  const items = useMenuItems(page);
   const close = useMenuStore((state) => state.close);
   const [active, setActive] = useState<number | null>(null);
+  // The main ring's item that opened the current page, to highlight again on the way back.
+  const [opener, setOpener] = useState(0);
+  // Where the current page wants its centre. A page swap starts from the previous centre, so
+  // the menu only moves if the new ring would not fit there.
+  const [origin, setOrigin] = useState<Point>(anchor);
   const rootRef = useRef<HTMLDivElement>(null);
   const count = items.length;
   const center = useMemo(
-    () => menuCenter(anchor, count, { width: window.innerWidth, height: window.innerHeight }),
-    [anchor, count],
+    () => menuCenter(origin, count, { width: window.innerWidth, height: window.innerHeight }),
+    [origin, count],
   );
   const activeItem = active === null ? undefined : items[active];
 
@@ -61,7 +79,30 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
     return { x: event.clientX - center.x, y: event.clientY - center.y };
   }
 
-  function run(item: MenuItem) {
+  function showPage(next: MenuPage, highlight: number | null) {
+    // A clicked button takes focus and is unmounted by the swap, which would drop focus to
+    // the body and leave the keys unheard.
+    rootRef.current?.focus();
+    setOrigin(center);
+    setPage(next);
+    setActive(highlight);
+  }
+
+  /** Back to the main ring, or closes the menu from there. */
+  function back(byKeyboard: boolean) {
+    if (page === "main") {
+      close();
+    } else {
+      showPage("main", byKeyboard ? opener : null);
+    }
+  }
+
+  function choose(item: MenuItem, index: number, byKeyboard: boolean) {
+    if ("opens" in item) {
+      setOpener(index);
+      showPage(item.opens, byKeyboard ? 0 : null);
+      return;
+    }
     close();
     item.run().catch((error: unknown) => console.warn(`failed to run menu item ${item.id}`, error));
   }
@@ -74,8 +115,8 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
   function onClick(event: MouseEvent) {
     const index = buttonAt(offsetOf(event), count);
     const item = index === null ? undefined : items[index];
-    if (item) {
-      run(item);
+    if (item && index !== null) {
+      choose(item, index, false);
     } else {
       close();
     }
@@ -84,9 +125,11 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
   function onContextMenu(event: MouseEvent) {
     event.preventDefault();
     const offset = offsetOf(event);
-    // Off the menu, the companion decides: reopen on the model, close elsewhere.
+    // Off the menu, the companion decides: reopen on the model, close elsewhere. On it,
+    // right-click steps back like Escape, but never closes from the main ring.
     if (Math.hypot(offset.x, offset.y) <= menuExtent(count)) {
       event.stopPropagation();
+      if (page !== "main") back(false);
     }
   }
 
@@ -100,7 +143,7 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
   function onKeyDown(event: KeyboardEvent) {
     switch (event.key) {
       case "Escape":
-        close();
+        back(true);
         break;
       case "ArrowRight":
       case "ArrowDown":
@@ -115,7 +158,7 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
         break;
       case "Enter":
       case " ":
-        if (activeItem) run(activeItem);
+        if (activeItem && active !== null) choose(activeItem, active, true);
         break;
       default:
         return;
@@ -136,7 +179,7 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
       ref={rootRef}
       className={styles.backdrop}
       role="menu"
-      aria-label="Companion menu"
+      aria-label={page === "main" ? "Companion menu" : "Characters"}
       aria-activedescendant={activeItem ? `menu-${activeItem.id}` : undefined}
       tabIndex={-1}
       onPointerDown={onPointerDown}
@@ -158,16 +201,26 @@ export function CompanionMenu({ anchor }: CompanionMenuProps) {
               key={item.id}
               id={`menu-${item.id}`}
               type="button"
-              role="menuitem"
+              {...roleOf(item)}
               tabIndex={-1}
               aria-label={item.label}
+              aria-haspopup={"opens" in item ? "menu" : undefined}
               className={styles.button}
               data-tone={item.tone}
               data-active={index === active}
               style={style}
             >
               <span className={styles.face}>
-                <Icon name={item.icon} className={styles.icon} />
+                {item.face.kind === "icon" ? (
+                  <Icon name={item.face.icon} className={styles.icon} />
+                ) : (
+                  <MenuAvatar name={item.face.name} iconUrl={item.face.iconUrl} />
+                )}
+                {item.checked && (
+                  <span className={styles.badge}>
+                    <Icon name="check" className={styles.badgeIcon} />
+                  </span>
+                )}
               </span>
             </button>
           );

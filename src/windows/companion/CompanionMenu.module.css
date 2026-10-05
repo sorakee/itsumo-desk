@@ -49,6 +49,7 @@
 }
 
 .face {
+  position: relative;
   box-sizing: border-box;
   display: grid;
   place-items: center;
@@ -82,13 +83,33 @@
   height: 24px;
 }
 
+/* Marks the current character. */
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--comic-paper);
+  color: var(--comic-ink);
+  box-shadow: 2px 2px 0 var(--comic-shadow);
+}
+
+.badgeIcon {
+  width: 14px;
+  height: 14px;
+}
+
 .label {
   position: absolute;
   top: 0;
   left: 0;
   margin: 0;
   padding: 4px 12px 5px;
-  transform: translate(-50%, -33.33%);
+  transform: translate(-50%, -50%);
   border-radius: 14px 17px 13px 16px / 16px 13px 17px 14px;
   background: var(--comic-paper);
   color: var(--comic-ink);
