@@ -13,6 +13,13 @@ export const ICONS = {
     PUPIL,
   ],
   hide: ["M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z", PUPIL, SLASH],
+  character: [
+    "M12 3.5a4.25 4.25 0 1 0 0 8.5a4.25 4.25 0 1 0 0-8.5",
+    "M4 20.5c.6-4 3.9-6.5 8-6.5s7.4 2.5 8 6.5",
+  ],
+  // Round caps turn the zero-length strokes into dots.
+  manage: ["M4 6h.01M4 12h.01M4 18h.01", "M9 6h11M9 12h11M9 18h11"],
+  check: ["M5 12.5l4.5 4.5L19 7.5"],
 } satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;

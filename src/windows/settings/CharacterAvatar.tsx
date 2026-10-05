@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { initialOf } from "@/shared/initial";
 import styles from "./CharacterAvatar.module.css";
 
 interface CharacterAvatarProps {
@@ -16,7 +17,7 @@ export function CharacterAvatar({ name, iconUrl, size = "small" }: CharacterAvat
   }
   return (
     <span className={className} aria-hidden="true">
-      {Array.from(name.trim())[0]?.toUpperCase() ?? "?"}
+      {initialOf(name)}
     </span>
   );
 }
