@@ -1,6 +1,8 @@
-// Where the character looks: at the cursor while it moves, around on its own once it has
-// been still for a while. Eyes, head and body each ease towards the target at their own
-// pace, eyes first.
+// Where the character looks. A moving cursor gets her attention now and then rather than
+// all the time: she notices it, follows it for a spell, loses interest and looks around on
+// her own, and may notice it again later. A cursor over the companion always has her
+// attention. Once it has been still for a while she wanders, glancing back at it at times.
+// Eyes, head and body each ease towards the target at their own pace, eyes first.
 
 /** A direction from -1 to 1 on each axis, y pointing up. */
 export interface GazeVector {
@@ -17,8 +19,15 @@ const DEAD_ZONE_PX = 24;
 // so the feel does not change with zoom or window scale.
 const REACH_PX = 320;
 
-// Seconds the cursor must be still before the gaze wanders off, picked per stillness.
+// Seconds the cursor must be still before it stops counting as active, picked per stillness.
 const STILL_SECONDS = [4, 8] as const;
+// Chance that a cursor starting to move gets noticed at once.
+const NOTICE_CHANCE = 0.35;
+// Seconds a spell of following the moving cursor lasts, and of ignoring it in between.
+const ATTEND_SECONDS = [1.5, 4] as const;
+const IGNORE_SECONDS = [8, 20] as const;
+// Seconds the gaze stays on the cursor after it leaves the companion.
+const NEAR_LINGER_SECONDS = 1.5;
 // Seconds the wandering gaze rests on each target.
 const DWELL_SECONDS = [1.5, 4.5] as const;
 // Chance that a new wander target is the cursor again, or straight ahead.
@@ -59,6 +68,8 @@ export interface GazeInput {
   cursor: GazeVector | null;
   /** Seconds since the cursor last moved. */
   cursorStillFor: number;
+  /** The cursor is over the companion, which always holds her attention. */
+  cursorNear: boolean;
 }
 
 export class Gaze {
@@ -69,32 +80,70 @@ export class Gaze {
   private wanderLeft = 0;
   private stillLimit: number;
   private lastStillFor = Infinity;
+  // While the cursor is active: seconds left of following it, then of ignoring it.
+  private attentionLeft = 0;
+  private ignoreLeft = 0;
 
   constructor(private readonly random: () => number = Math.random) {
     this.stillLimit = between(random, STILL_SECONDS);
   }
 
-  update(deltaSeconds: number, { cursor, cursorStillFor }: GazeInput): void {
+  update(deltaSeconds: number, { cursor, cursorStillFor, cursorNear }: GazeInput): void {
+    const wasActive = this.lastStillFor < this.stillLimit;
     if (cursorStillFor < this.lastStillFor) {
-      // The cursor moved: the next wander starts after a fresh pause.
+      // The cursor moved: it stays active until a fresh pause.
       this.stillLimit = between(this.random, STILL_SECONDS);
-      this.wanderLeft = 0;
+      if (!wasActive) this.notice();
     }
     this.lastStillFor = cursorStillFor;
 
-    if (cursor && cursorStillFor < this.stillLimit) {
+    const active = cursor !== null && cursorStillFor < this.stillLimit;
+    if (active && cursorNear) {
+      this.attentionLeft = Math.max(this.attentionLeft, NEAR_LINGER_SECONDS);
+    }
+    if (active && this.attentionLeft > 0) {
       this.target = cursor;
-    } else {
-      this.wanderLeft -= deltaSeconds;
-      if (this.wanderLeft <= 0) {
-        this.target = this.wanderTarget(cursor);
-        this.wanderLeft = between(this.random, DWELL_SECONDS);
+      // Whenever she stops following, she picks somewhere new to look straight away.
+      this.wanderLeft = 0;
+      this.attentionLeft -= deltaSeconds;
+      if (this.attentionLeft <= 0) {
+        this.ignoreLeft = between(this.random, IGNORE_SECONDS);
       }
+    } else {
+      if (active) {
+        this.ignoreLeft -= deltaSeconds;
+        if (this.ignoreLeft <= 0) {
+          this.attentionLeft = between(this.random, ATTEND_SECONDS);
+        }
+      } else {
+        this.attentionLeft = 0;
+      }
+      // A glance back aims at where the cursor is when it is picked, which only means
+      // something while the cursor is still; at a moving one she would stare at nothing.
+      this.wander(deltaSeconds, active ? null : cursor);
     }
 
     ease(this.eyes, this.target, deltaSeconds, EYES_TAU);
     ease(this.head, this.target, deltaSeconds, HEAD_TAU);
     ease(this.body, this.target, deltaSeconds, BODY_TAU);
+  }
+
+  /** A cursor that starts moving catches her attention, or not for a while. */
+  private notice(): void {
+    if (this.random() < NOTICE_CHANCE) {
+      this.attentionLeft = between(this.random, ATTEND_SECONDS);
+    } else {
+      this.attentionLeft = 0;
+      this.ignoreLeft = between(this.random, IGNORE_SECONDS);
+    }
+  }
+
+  private wander(deltaSeconds: number, cursor: GazeVector | null): void {
+    this.wanderLeft -= deltaSeconds;
+    if (this.wanderLeft <= 0) {
+      this.target = this.wanderTarget(cursor);
+      this.wanderLeft = between(this.random, DWELL_SECONDS);
+    }
   }
 
   private wanderTarget(cursor: GazeVector | null): GazeVector {

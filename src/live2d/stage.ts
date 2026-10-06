@@ -169,6 +169,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       {
         cursor: gazeAt(onStage),
         cursorStillFor: (performance.now() - cursorMovedAt) / 1000,
+        cursorNear: pointer !== null,
         motionBlinks: model.motionBlinks,
       },
       parameters,

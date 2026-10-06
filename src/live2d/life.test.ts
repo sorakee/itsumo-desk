@@ -62,12 +62,18 @@ function setup() {
   return { values, life, run };
 }
 
-const still: LifeInput = { cursor: null, cursorStillFor: Infinity, motionBlinks: false };
+const still: LifeInput = {
+  cursor: null,
+  cursorStillFor: Infinity,
+  cursorNear: false,
+  motionBlinks: false,
+};
 
 describe("Life", () => {
   it("turns the head and eyes towards the cursor", () => {
     const { values, run } = setup();
-    run(2, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, motionBlinks: false });
+    // Over the companion, so the gaze follows it without waiting to notice it.
+    run(2, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, cursorNear: true, motionBlinks: false });
 
     // 0.8 of the half-range, give or take the sway.
     expect(values[0]).toBeGreaterThan(18);
@@ -102,7 +108,7 @@ describe("Life", () => {
   it("lets a preset override the gaze", () => {
     const { values, life, run } = setup();
     life.presets.play("lookAway");
-    run(1, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, motionBlinks: true });
+    run(1, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, cursorNear: false, motionBlinks: true });
 
     expect(values[1]).toBeCloseTo(-0.8);
   });
