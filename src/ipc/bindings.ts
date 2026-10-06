@@ -50,6 +50,8 @@ export const commands = {
 	renameCharacter: (id: string, name: string | null) => typedError<null, AppError>(__TAURI_INVOKE("rename_character", { id, name })),
 	/**  Marks an installed character as a favourite, or unmarks it. */
 	setCharacterFavorite: (id: string, favorite: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_character_favorite", { id, favorite })),
+	/**  An installed character's model and mapping, for the mapping editor. */
+	characterMapping: (id: string) => typedError<CharacterMapping, AppError>(__TAURI_INVOKE("character_mapping", { id })),
 	/**
 	 *  Lets the user pick a pack or model, then copies and validates it in staging. `None` if
 	 *  the dialog was cancelled.
@@ -111,6 +113,19 @@ export type AppInfo = {
 	version: string,
 };
 
+/**
+ *  What the mapping editor needs for an installed character: its model, for the preview,
+ *  and its mapping.
+ */
+export type CharacterMapping = {
+	/**  The `model3.json`, served by the `character` URI scheme. */
+	modelUrl: string,
+	extras: ModelExtras,
+	/**  `None` if the pack has no usable `mapping.json`. */
+	mapping: Mapping | null,
+	warnings: string[],
+};
+
 /**  An installed character, as listed in the settings window. */
 export type CharacterSummary = {
 	id: string,
@@ -134,6 +149,12 @@ export type CharactersChanged = null;
 export type CursorMoved = {
 	x: number | null,
 	y: number | null,
+};
+
+export type CustomEntry = {
+	name: string,
+	description: string,
+	target: Target,
 };
 
 export type ExtraExpression = {
@@ -189,6 +210,13 @@ export type ImportReview = {
 	name: string,
 };
 
+export type Mapping = {
+	slots: { [key in string]: Target },
+	custom: CustomEntry[],
+	/**  Parameter role → model parameter id, for models with non-standard ids. */
+	parameters: { [key in string]: string },
+};
+
 /**
  *  Expressions and motions that ship with a model but are missing from its `model3.json`,
  *  typical of VTube Studio exports. The loader merges them into the parsed `model3.json`,
@@ -238,6 +266,12 @@ export type StagedImport = {
 	extras: ModelExtras,
 	warnings: string[],
 };
+
+/**
+ *  What a slot or custom entry plays. On the wire it has the file's shape:
+ *  `{ "expression": "exp_03" }`.
+ */
+export type Target = ({ expression: string }) & { motion?: never; preset?: never } | ({ motion: string }) & { expression?: never; preset?: never } | ({ preset: string }) & { expression?: never; motion?: never };
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

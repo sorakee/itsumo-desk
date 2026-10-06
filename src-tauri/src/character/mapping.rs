@@ -5,7 +5,9 @@
 
 use std::collections::BTreeMap;
 
+use serde::Serialize;
 use serde_json::{Map, Value};
+use specta::Type;
 
 use super::manifest::ModelManifest;
 
@@ -33,21 +35,24 @@ const CORE_SLOTS: [&str; 15] = [
 /// Mirrors `PRESET_NAMES` in `src/live2d/presets.ts`.
 const PRESETS: [&str; 5] = ["yawn", "nod", "headTilt", "lookAway", "doze"];
 
-#[derive(Debug, Clone, PartialEq)]
+/// What a slot or custom entry plays. On the wire it has the file's shape:
+/// `{ "expression": "exp_03" }`.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub enum Target {
     Expression(String),
     Motion(String),
     Preset(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
 pub struct CustomEntry {
     pub name: String,
     pub description: String,
     pub target: Target,
 }
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
 pub struct Mapping {
     pub slots: BTreeMap<String, Target>,
     pub custom: Vec<CustomEntry>,
@@ -65,7 +70,8 @@ fn non_empty(value: Option<&Value>) -> Option<&str> {
 fn target(entry: &Map<String, Value>) -> Option<Target> {
     if let Some(name) = non_empty(entry.get("expression")) {
         Some(Target::Expression(name.to_owned()))
-    } else if let Some(name) = non_empty(entry.get("motion")) {
+    } else if let Some(name) = entry.get("motion").and_then(Value::as_str) {
+        // Taken as is: model3.json allows any group name, the empty one included.
         Some(Target::Motion(name.to_owned()))
     } else {
         non_empty(entry.get("preset")).map(|name| Target::Preset(name.to_owned()))
@@ -264,6 +270,34 @@ mod tests {
         assert!(mapping.parameters.is_empty());
         // schema, dance, joy, sad, nameless, duplicate, parameter
         assert_eq!(warnings.len(), 7, "{warnings:?}");
+    }
+
+    #[test]
+    fn motion_groups_may_have_an_empty_name() {
+        let (mapping, warnings) = parse(&json!({
+            "schema": 1,
+            "slots": { "idle": { "motion": "" }, "joy": { "expression": " " } }
+        }));
+        assert_eq!(mapping.slots["idle"], Target::Motion(String::new()));
+        assert!(!mapping.slots.contains_key("joy"));
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+    }
+
+    #[test]
+    fn serialises_targets_in_the_file_shape() {
+        let (mapping, _) = parse(&json!({
+            "schema": 1,
+            "slots": { "joy": { "expression": "exp_03" } },
+            "custom": [{ "name": "smug", "motion": "Smug" }]
+        }));
+        assert_eq!(
+            serde_json::to_value(&mapping).expect("serialises"),
+            json!({
+                "slots": { "joy": { "expression": "exp_03" } },
+                "custom": [{ "name": "smug", "description": "", "target": { "motion": "Smug" } }],
+                "parameters": {}
+            })
+        );
     }
 
     #[test]

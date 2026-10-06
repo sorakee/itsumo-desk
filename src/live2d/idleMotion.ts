@@ -71,7 +71,7 @@ export interface Clip {
   blinks: boolean;
 }
 
-/** Parses one idle motion; a malformed file is skipped with a warning. */
+/** Parses one motion; a malformed file is skipped with a warning. */
 export function createClip(
   bytes: ArrayBuffer,
   entry: MotionEntry,
@@ -81,7 +81,7 @@ export function createClip(
   try {
     json = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
-    console.warn(`skipping idle motion ${entry.file}: not JSON`);
+    console.warn(`skipping motion ${entry.file}: not JSON`);
     return undefined;
   }
   let motion: CubismMotion | null = null;
@@ -92,7 +92,7 @@ export function createClip(
     // Reported below.
   }
   if (!motion) {
-    console.warn(`skipping idle motion ${entry.file}: not a valid motion3.json`);
+    console.warn(`skipping motion ${entry.file}: not a valid motion3.json`);
     return undefined;
   }
   const ids = CubismFramework.getIdManager();

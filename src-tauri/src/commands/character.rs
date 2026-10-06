@@ -2,7 +2,8 @@ use tauri::{AppHandle, WebviewWindow};
 
 use super::AppError;
 use crate::character::{
-    self, ActiveCharacter, CharacterSummary, ImportKind, ImportReview, ModelManifest, StagedImport,
+    self, ActiveCharacter, CharacterMapping, CharacterSummary, ImportKind, ImportReview,
+    ModelManifest, StagedImport,
 };
 
 fn validate_id(id: &str) -> Result<(), AppError> {
@@ -74,6 +75,14 @@ pub async fn set_character_favorite(
 ) -> Result<(), AppError> {
     validate_id(&id)?;
     Ok(character::set_favorite(&app, id, favorite).await?)
+}
+
+/// An installed character's model and mapping, for the mapping editor.
+#[tauri::command]
+#[specta::specta]
+pub async fn character_mapping(app: AppHandle, id: String) -> Result<CharacterMapping, AppError> {
+    validate_id(&id)?;
+    Ok(character::mapping(&app, id).await?)
 }
 
 /// Lets the user pick a pack or model, then copies and validates it in staging. `None` if
