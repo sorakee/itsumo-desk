@@ -21,9 +21,10 @@ use super::{
     import::{self, Source},
     manifest::ModelManifest,
     mapping::{self, Mapping},
-    pack::{self, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE},
+    pack::{self, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE, MAPPING_FILE},
     paths::is_valid_id,
-    protocol, ActiveCharacter, CharacterError, CharacterSummary, ImportReview, StagedImport,
+    protocol, ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary, ImportReview,
+    StagedImport,
 };
 
 pub const STAGING: &str = ".staging";
@@ -178,6 +179,47 @@ impl CharacterLibrary {
             id: id.to_owned(),
             model_url: url_base(&[id], &character.model),
             extras: character.extras,
+        })
+    }
+
+    /// An installed character's mapping, with warnings for whatever in it was dropped or
+    /// points at something the model lacks.
+    pub fn mapping(&self, id: &str) -> Result<CharacterMapping, CharacterError> {
+        let (dir, character) = self
+            .read_installed(id)
+            .ok_or_else(|| CharacterError::UnknownCharacter(id.to_owned()))?;
+        let mut warnings = Vec::new();
+        let path = dir.join(MAPPING_FILE);
+        let mapping = if path.is_file() {
+            match pack::read_json(&path) {
+                Ok(json) => {
+                    let (mapping, parse_warnings) = mapping::parse(&json);
+                    warnings.extend(parse_warnings);
+                    Some(mapping)
+                }
+                Err(error) => {
+                    warnings.push(error.to_string());
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        if let Some(mapping) = &mapping {
+            // Cached at import; without it the targets just go unchecked.
+            match pack::read_json(&dir.join(MANIFEST_FILE)).and_then(|json| {
+                serde_json::from_value::<ModelManifest>(json)
+                    .map_err(|e| CharacterError::InvalidPack(e.to_string()))
+            }) {
+                Ok(manifest) => warnings.extend(mapping::check(mapping, &manifest)),
+                Err(error) => warn!(%error, id, "could not read the cached manifest"),
+            }
+        }
+        Ok(CharacterMapping {
+            model_url: url_base(&[id], &character.model),
+            extras: character.extras,
+            mapping,
+            warnings,
         })
     }
 
@@ -463,6 +505,44 @@ mod tests {
         assert_eq!(library.pack_name("beta").expect("installed"), "beta");
         assert!(matches!(
             library.pack_name("gamma"),
+            Err(CharacterError::UnknownCharacter(_))
+        ));
+    }
+
+    #[test]
+    fn mapping_reads_the_pack_and_checks_it_against_the_manifest() {
+        let tmp = TestDir::new("library-mapping");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        let source = tmp.path("pack");
+        model_folder(&source.join("model"), "m");
+        let character =
+            json!({ "schema": 1, "id": "mine", "name": "Mine", "model": "model/m.model3.json" });
+        fs::write(source.join("character.json"), character.to_string())
+            .expect("write character.json");
+        let mapping = json!({
+            "schema": 1,
+            "slots": { "joy": { "expression": "exp_01" }, "dance": { "motion": "Dance" } }
+        });
+        fs::write(source.join("mapping.json"), mapping.to_string()).expect("write mapping.json");
+        let staged = library.stage(&Source::Folder(source)).expect("staged");
+        library
+            .review(&staged.token, &manifest(), &Preferences::new())
+            .expect("reviewed");
+        library.commit(&staged.token, false).expect("committed");
+
+        let read = library.mapping("mine").expect("installed");
+        assert!(read.model_url.ends_with("/mine/model/m.model3.json"));
+        let mapping = read.mapping.expect("has a mapping");
+        assert_eq!(mapping.slots.len(), 1);
+        // The unknown slot, and the expression the empty manifest lacks.
+        assert_eq!(read.warnings.len(), 2, "{:?}", read.warnings);
+
+        fs::remove_file(tmp.path("characters/mine/mapping.json")).expect("remove mapping");
+        let read = library.mapping("mine").expect("installed");
+        assert!(read.mapping.is_none());
+        assert!(read.warnings.is_empty());
+        assert!(matches!(
+            library.mapping("other"),
             Err(CharacterError::UnknownCharacter(_))
         ));
     }

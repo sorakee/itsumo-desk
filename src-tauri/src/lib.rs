@@ -35,6 +35,7 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             commands::character::remove_character,
             commands::character::rename_character,
             commands::character::set_character_favorite,
+            commands::character::character_mapping,
             commands::character::stage_character_import,
             commands::character::review_character_import,
             commands::character::commit_character_import,

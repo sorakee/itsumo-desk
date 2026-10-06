@@ -4,14 +4,17 @@ import { CubismMatrix44 } from "@cubism/framework/math/cubismmatrix44";
 import { CubismMoc } from "@cubism/framework/model/cubismmoc";
 import type { CubismModel } from "@cubism/framework/model/cubismmodel";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
+import { CubismMotionManager } from "@cubism/framework/motion/cubismmotionmanager";
 import { CUBISM_SHADER_PATH, startCubism } from "@/live2d/cubism";
+import { Expressions } from "@/live2d/expressions";
 import { type Bounds, boundsOf } from "@/live2d/framing";
-import { createClip, IdleLoop, idleGroup } from "@/live2d/idleMotion";
+import { type Clip, createClip, IdleLoop, idleGroup } from "@/live2d/idleMotion";
 import { buildManifest, type ModelManifest, parseDisplayNames } from "@/live2d/manifest";
 import {
   type ModelExtras,
   type ModelLayout,
   type ModelSettings,
+  type MotionEntry,
   parseModelSettings,
   withExtras,
 } from "@/live2d/modelSettings";
@@ -27,6 +30,8 @@ export interface ModelSource {
 
 // Drawables fainter than this do not count towards the model's visible extent.
 const VISIBLE_OPACITY = 0.01;
+// Above the idle loop's, which is on its own manager anyway; kept apart for when they share.
+const TRIGGERED_PRIORITY = 2;
 
 export class ModelLoadError extends Error {
   override name = "ModelLoadError";
@@ -158,8 +163,21 @@ export class Live2DModel extends CubismUserModel {
   /** From model3.json, when the author set one. */
   layout: ModelLayout | undefined;
   private idle: IdleLoop | undefined;
+  private expressions: Expressions | undefined;
+  // Motions played on request (previews now, slots later), over the idle loop.
+  private readonly triggered = new CubismMotionManager();
+  private triggeredClip: Clip | undefined;
+  private readonly clips = new Map<string, Promise<Clip | undefined>>();
+  // Aborts the fetches of expressions and motions still loading when the model goes.
+  private readonly loads = new AbortController();
+  // Set once the moc has loaded.
+  private manifest: ModelManifest | undefined;
 
-  private constructor(private readonly gl: WebGL2RenderingContext) {
+  private constructor(
+    private readonly gl: WebGL2RenderingContext,
+    private readonly source: ModelSource,
+    private readonly settings: ModelSettings,
+  ) {
     super();
   }
 
@@ -191,7 +209,7 @@ export class Live2DModel extends CubismUserModel {
       ),
     ]);
 
-    const model = new Live2DModel(gl);
+    const model = new Live2DModel(gl, source, settings);
     try {
       signal.throwIfAborted();
       // The consistency check guards the Core against malformed third-party mocs.
@@ -200,6 +218,8 @@ export class Live2DModel extends CubismUserModel {
         throw mocError(moc);
       }
       const manifest = manifestOf(settings, model.getModel().getModel(), displayInfo);
+      model.manifest = manifest;
+      model.expressions = new Expressions((name) => model.fetchExpression(name));
       model.centerCanvas();
       model.layout = settings.layout;
       model.idle = new IdleLoop(
@@ -292,21 +312,75 @@ export class Live2DModel extends CubismUserModel {
     );
   }
 
-  /** Whether the idle motion playing now blinks by itself. */
+  /** Whether the motion playing now blinks by itself. */
   get motionBlinks(): boolean {
+    if (this.triggeredClip && !this.triggered.isFinished()) {
+      return this.triggeredClip.blinks;
+    }
     return this.idle?.blinks ?? false;
   }
 
+  /** The expression asked for last, if any. */
+  get expression(): string | null {
+    return this.expressions?.current ?? null;
+  }
+
+  /** Cross-fades to the expression `name`, or back to none. Unknown names are ignored. */
+  setExpression(name: string | null): void {
+    if (name !== null && !this.settings.expressions.some((e) => e.name === name)) return;
+    this.expressions?.set(name);
+  }
+
   /**
-   * Plays the motions (life layer 1) on the default pose. Every frame starts from the
-   * defaults, so the layers written on top before `update` do not accumulate and a motion
-   * fades in from, and back out to, the rest pose rather than freezing where it stopped.
-   * `quiet` fades the idle motion out, e.g. while a preset plays.
+   * Plays motion `index` of `group` once, over the idle motion. Unknown motions and files
+   * that fail to load are skipped.
+   */
+  playMotion(group: string, index: number): void {
+    const entry = this.settings.motionGroups.find((g) => g.name === group)?.motions[index];
+    if (!entry) return;
+    this.loadClip(entry).then((clip) => {
+      if (!clip || this.loads.signal.aborted) return;
+      this.triggeredClip = clip;
+      this.triggered.startMotionPriority(clip.motion, false, TRIGGERED_PRIORITY);
+    });
+  }
+
+  /**
+   * Plays the motions (life layers 1 and 3) on the default pose. Every frame starts from
+   * the defaults, so the layers written on top before `update` do not accumulate and a
+   * motion fades in from, and back out to, the rest pose rather than freezing where it
+   * stopped. `quiet` fades the idle motion out, e.g. while a preset plays; so does a
+   * triggered motion.
    */
   updateMotion(deltaSeconds: number, quiet: boolean): void {
-    const { parameters } = this.getModel().getModel();
+    const model = this.getModel();
+    const { parameters } = model.getModel();
     parameters.values.set(parameters.defaultValues);
-    this.idle?.update(this.getModel(), deltaSeconds, quiet);
+    this.idle?.update(model, deltaSeconds, quiet || !this.triggered.isFinished());
+    this.triggered.updateMotion(model, deltaSeconds);
+    this.expressions?.update(model, deltaSeconds);
+  }
+
+  private async fetchExpression(name: string): Promise<ArrayBuffer | undefined> {
+    const entry = this.settings.expressions.find((e) => e.name === name);
+    return entry && fetchBytes(resolve(this.source, entry.file), this.loads.signal);
+  }
+
+  private loadClip(entry: MotionEntry): Promise<Clip | undefined> {
+    let clip = this.clips.get(entry.file);
+    if (!clip) {
+      const manifest = this.manifest;
+      clip = fetchBytes(resolve(this.source, entry.file), this.loads.signal).then(
+        (bytes) => (manifest ? createClip(bytes, entry, manifest) : undefined),
+        (error: unknown) => {
+          if (!this.loads.signal.aborted)
+            console.warn(`failed to load motion ${entry.file}`, error);
+          return undefined;
+        },
+      );
+      this.clips.set(entry.file, clip);
+    }
+    return clip;
   }
 
   /** Advances physics and pose by `deltaSeconds` and applies the parameters. */
@@ -329,8 +403,17 @@ export class Live2DModel extends CubismUserModel {
   }
 
   override release(): void {
+    this.loads.abort();
     this.idle?.release();
     this.idle = undefined;
+    this.expressions?.release();
+    this.expressions = undefined;
+    this.triggered.stopAllMotions();
+    this.triggeredClip = undefined;
+    for (const clip of this.clips.values()) {
+      clip.then((loaded) => loaded?.motion.release());
+    }
+    this.clips.clear();
     for (const texture of this.textures) {
       this.gl.deleteTexture(texture);
     }

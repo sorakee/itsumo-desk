@@ -11,6 +11,7 @@ interface CharacterRowProps {
   active: boolean;
   disabled: boolean;
   onActivate: () => void;
+  onEditMapping: () => void;
   onRemove: () => void;
   /** Null goes back to the pack's name. Resolves to whether the rename was saved. */
   onRename: (name: string | null) => Promise<boolean>;
@@ -22,6 +23,7 @@ export function CharacterRow({
   active,
   disabled,
   onActivate,
+  onEditMapping,
   onRemove,
   onRename,
   onToggleFavorite,
@@ -143,6 +145,9 @@ export function CharacterRow({
           </>
         ) : (
           <>
+            <Button onClick={onEditMapping} disabled={disabled}>
+              Mapping
+            </Button>
             {!active && (
               <Button onClick={onActivate} disabled={disabled}>
                 Use

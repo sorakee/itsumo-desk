@@ -2,16 +2,30 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { ModelManifest } from "@/live2d/manifest";
 import {
   type ActiveCharacter,
+  type CharacterMapping,
   type CharacterSummary,
+  type CustomEntry,
   commands,
   events,
   type ImportKind,
   type ImportReview,
+  type Mapping,
   type StagedImport,
+  type Target,
 } from "./bindings";
 import { unwrap } from "./result";
 
-export type { ActiveCharacter, CharacterSummary, ImportKind, ImportReview, StagedImport };
+export type {
+  ActiveCharacter,
+  CharacterMapping,
+  CharacterSummary,
+  CustomEntry,
+  ImportKind,
+  ImportReview,
+  Mapping,
+  StagedImport,
+  Target,
+};
 
 /** The installed characters, by name. */
 export function listCharacters(): Promise<CharacterSummary[]> {
@@ -41,6 +55,11 @@ export async function renameCharacter(id: string, name: string | null): Promise<
 /** Marks an installed character as a favourite, or unmarks it. */
 export async function setCharacterFavorite(id: string, favorite: boolean): Promise<void> {
   await unwrap(commands.setCharacterFavorite(id, favorite));
+}
+
+/** An installed character's model and mapping, for the mapping editor. */
+export function characterMapping(id: string): Promise<CharacterMapping> {
+  return unwrap(commands.characterMapping(id));
 }
 
 /**

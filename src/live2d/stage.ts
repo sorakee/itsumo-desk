@@ -48,6 +48,8 @@ export interface Stage {
   panFraming(dx: number, dy: number): void;
   /** Goes back to the model's default framing. */
   resetFraming(): void;
+  /** Frames the model as `framing` says, kept on the model. */
+  setFraming(framing: Framing): void;
   /**
    * Where the cursor is, or null when it is outside the window. The stage tests whether the
    * model is drawn under it and reports changes to `onHitChange` listeners.
@@ -56,6 +58,10 @@ export interface Stage {
   onHitChange(listener: (hit: boolean) => void): () => void;
   /** Where the cursor is, inside the window or not, for the gaze to follow. */
   setCursor(point: Point): void;
+  /** Cross-fades to an expression of the model on stage, or with null back to none. */
+  setExpression(name: string | null): void;
+  /** Plays motion `index` of the motion group `group` once. */
+  playMotion(group: string, index: number): void;
   /** Plays a parameter preset, replacing any playing one. */
   playPreset(name: PresetName): void;
   /** Fades out the playing preset, e.g. ends a doze. */
@@ -329,6 +335,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       probeDue = true;
     },
 
+    setFraming(framing) {
+      if (!current) return;
+      current.framing = clampFraming(framing, current.extent);
+      probeDue = true;
+    },
+
     setPointer(point) {
       pointer = point;
       probeDue = point !== null;
@@ -346,6 +358,14 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setCursor(point) {
       cursor = point;
       cursorMovedAt = performance.now();
+    },
+
+    setExpression(name) {
+      current?.model.setExpression(name);
+    },
+
+    playMotion(group, index) {
+      current?.model.playMotion(group, index);
     },
 
     playPreset(name) {

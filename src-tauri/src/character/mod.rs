@@ -21,6 +21,7 @@ use tracing::warn;
 
 pub use library::{is_valid_token, CharacterLibrary};
 pub use manifest::ModelManifest;
+pub use mapping::Mapping;
 pub use names::display_name;
 pub use pack::ModelExtras;
 pub use paths::is_valid_id;
@@ -93,6 +94,19 @@ pub struct ActiveCharacter {
     pub extras: ModelExtras,
 }
 
+/// What the mapping editor needs for an installed character: its model, for the preview,
+/// and its mapping.
+#[derive(Debug, Clone, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterMapping {
+    /// The `model3.json`, served by the `character` URI scheme.
+    pub model_url: String,
+    pub extras: ModelExtras,
+    /// `None` if the pack has no usable `mapping.json`.
+    pub mapping: Option<Mapping>,
+    pub warnings: Vec<String>,
+}
+
 /// What to pick in the native dialog.
 #[derive(Debug, Clone, Copy, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -148,6 +162,10 @@ pub async fn active(app: &AppHandle) -> Result<Option<ActiveCharacter>, Characte
         return Ok(None);
     };
     blocking(app, move |library| Ok(library.active(&id))).await
+}
+
+pub async fn mapping(app: &AppHandle, id: String) -> Result<CharacterMapping, CharacterError> {
+    blocking(app, move |library| library.mapping(&id)).await
 }
 
 async fn emit_active(app: &AppHandle) {
