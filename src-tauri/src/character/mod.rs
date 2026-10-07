@@ -28,7 +28,7 @@ pub use paths::is_valid_id;
 pub use protocol::{handle as handle_protocol, SCHEME};
 
 use crate::{
-    events::{ActiveCharacterChanged, CharactersChanged},
+    events::{ActiveCharacterChanged, CharactersChanged, MappingChanged},
     settings::SettingsStore,
 };
 
@@ -56,6 +56,8 @@ pub enum CharacterError {
     Conflict(String),
     #[error("{0}")]
     InvalidName(&'static str),
+    #[error("the mapping was not saved: {0}")]
+    InvalidMapping(String),
     #[error("background task failed: {0}")]
     Task(String),
 }
@@ -92,6 +94,9 @@ pub struct ActiveCharacter {
     /// The `model3.json`, served by the `character` URI scheme.
     pub model_url: String,
     pub extras: ModelExtras,
+    /// The mapping in effect: the user's edits if any, else the pack's (D45). Later changes
+    /// arrive as `MappingChanged`, so the model need not reload.
+    pub mapping: Option<Mapping>,
 }
 
 /// What the mapping editor needs for an installed character: its model, for the preview,
@@ -102,8 +107,10 @@ pub struct CharacterMapping {
     /// The `model3.json`, served by the `character` URI scheme.
     pub model_url: String,
     pub extras: ModelExtras,
-    /// `None` if the pack has no usable `mapping.json`.
+    /// `None` if the pack has no usable mapping.
     pub mapping: Option<Mapping>,
+    /// Whether the mapping is the user's edits (`mapping.user.json`) rather than the pack's.
+    pub customized: bool,
     pub warnings: Vec<String>,
 }
 
@@ -185,6 +192,36 @@ fn emit_list_changed(app: &AppHandle) {
     if let Err(error) = CharactersChanged.emit(app) {
         warn!(%error, "failed to announce the character list");
     }
+}
+
+fn emit_mapping_changed(app: &AppHandle, id: String, mapping: Option<Mapping>) {
+    if let Err(error) = (MappingChanged { id, mapping }).emit(app) {
+        warn!(%error, "failed to announce a mapping change");
+    }
+}
+
+/// Saves the user's edits to a character's mapping and returns it as the editor shows it.
+pub async fn save_mapping(
+    app: &AppHandle,
+    id: String,
+    mapping: Mapping,
+) -> Result<CharacterMapping, CharacterError> {
+    mapping::validate(&mapping).map_err(CharacterError::InvalidMapping)?;
+    let saved = id.clone();
+    let read = blocking(app, move |library| library.save_mapping(&saved, &mapping)).await?;
+    emit_mapping_changed(app, id, read.mapping.clone());
+    Ok(read)
+}
+
+/// Drops the user's edits to a character's mapping, going back to the pack's own.
+pub async fn reset_mapping(
+    app: &AppHandle,
+    id: String,
+) -> Result<CharacterMapping, CharacterError> {
+    let reset = id.clone();
+    let read = blocking(app, move |library| library.reset_mapping(&reset)).await?;
+    emit_mapping_changed(app, id, read.mapping.clone());
+    Ok(read)
 }
 
 /// Makes `id` the active character, or clears it with `None`.

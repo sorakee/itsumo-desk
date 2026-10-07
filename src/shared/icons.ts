@@ -24,6 +24,7 @@ export const ICONS = {
   pencil: ["M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4Z", "M13.5 6.5l4 4"],
   play: ["M8 5.5v13l10.5-6.5Z"],
   back: ["M15 5l-7 7 7 7"],
+  close: ["M6 6l12 12M18 6L6 18"],
 } satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;

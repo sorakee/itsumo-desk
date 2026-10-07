@@ -62,6 +62,16 @@ export function characterMapping(id: string): Promise<CharacterMapping> {
   return unwrap(commands.characterMapping(id));
 }
 
+/** Saves the user's edits to a character's mapping and returns it as the editor shows it. */
+export function saveCharacterMapping(id: string, mapping: Mapping): Promise<CharacterMapping> {
+  return unwrap(commands.saveCharacterMapping(id, mapping));
+}
+
+/** Drops the user's edits to a character's mapping, going back to the pack's own. */
+export function resetCharacterMapping(id: string): Promise<CharacterMapping> {
+  return unwrap(commands.resetCharacterMapping(id));
+}
+
 /**
  * Lets the user pick a pack or model in a native dialog, then copies and validates it.
  * Resolves with null if the dialog was cancelled.
@@ -97,6 +107,13 @@ export function onActiveCharacterChanged(
   handler: (character: ActiveCharacter | null) => void,
 ): Promise<UnlistenFn> {
   return events.activeCharacterChanged.listen(({ payload }) => handler(payload.character));
+}
+
+/** Subscribes to saved or reset mappings, with the mapping now in effect. */
+export function onMappingChanged(
+  handler: (id: string, mapping: Mapping | null) => void,
+): Promise<UnlistenFn> {
+  return events.mappingChanged.listen(({ payload }) => handler(payload.id, payload.mapping));
 }
 
 /** Subscribes to characters being installed or removed. */

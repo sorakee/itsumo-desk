@@ -5,7 +5,7 @@ use serde::Serialize;
 use specta::Type;
 use tauri_specta::Event;
 
-use crate::character::ActiveCharacter;
+use crate::character::{ActiveCharacter, Mapping};
 
 /// The global cursor, relative to the companion's client area in CSS pixels. Values outside
 /// the window's size mean the cursor is elsewhere on the desktop.
@@ -31,6 +31,14 @@ pub struct ResetFraming;
 #[derive(Debug, Clone, Serialize, Type, Event)]
 pub struct ActiveCharacterChanged {
     pub character: Option<ActiveCharacter>,
+}
+
+/// The user saved or reset a character's mapping. Carries the mapping now in effect, so the
+/// companion applies it without reloading the model.
+#[derive(Debug, Clone, Serialize, Type, Event)]
+pub struct MappingChanged {
+    pub id: String,
+    pub mapping: Option<Mapping>,
 }
 
 /// A character was installed or removed.

@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { type CharacterMapping, characterMapping } from "@/ipc";
+import { useMemo, useRef } from "react";
 import type { ModelSource } from "@/live2d/model";
-import { errorMessage } from "@/shared/errorMessage";
 import { Icon } from "@/shared/Icon";
 import { useCharactersStore } from "@/stores/characters";
-import { MappingSummary } from "@/windows/settings/MappingSummary";
-import { PreviewControls } from "@/windows/settings/PreviewControls";
+import { MappingPanels } from "@/windows/settings/MappingPanels";
+import { useCharacterMapping } from "@/windows/settings/useCharacterMapping";
 import { usePreviewStage } from "@/windows/settings/usePreviewStage";
 import styles from "./MappingView.module.css";
 
@@ -14,31 +12,16 @@ interface MappingViewProps {
   onBack: () => void;
 }
 
-/** One character's expressions, motions and mapping, with a live preview. */
+/** One character's expressions, motions and mapping editor, with a live preview. */
 export function MappingView({ id, onBack }: MappingViewProps) {
   const name = useCharactersStore((state) => state.characters?.find((c) => c.id === id)?.name);
-  const [data, setData] = useState<CharacterMapping | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const editing = useCharacterMapping(id);
+  const { model, loadError: error } = editing;
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    characterMapping(id).then(
-      (loaded) => {
-        if (!cancelled) setData(loaded);
-      },
-      (failed: unknown) => {
-        if (!cancelled) setError(errorMessage(failed));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
   const source = useMemo<ModelSource | undefined>(
-    () => (data ? { id, url: data.modelUrl, extras: data.extras } : undefined),
-    [id, data],
+    () => (model ? { id, url: model.url, extras: model.extras } : undefined),
+    [id, model],
   );
   const { status: preview, resetView } = usePreviewStage(canvasRef, source);
 
@@ -83,10 +66,18 @@ export function MappingView({ id, onBack }: MappingViewProps) {
           {error ? (
             <p className={styles.error}>{error}</p>
           ) : (
-            data && <MappingSummary mapping={data.mapping} warnings={data.warnings} />
-          )}
-          {preview.kind === "ready" && (
-            <PreviewControls stage={preview.stage} manifest={preview.manifest} />
+            <>
+              {preview.kind === "ready" && (
+                <MappingPanels
+                  stage={preview.stage}
+                  manifest={preview.manifest}
+                  editing={editing}
+                />
+              )}
+              {preview.kind === "error" && (
+                <p className={styles.error}>The mapping can be edited once the model loads.</p>
+              )}
+            </>
           )}
         </div>
       </div>

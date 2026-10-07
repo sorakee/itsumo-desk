@@ -36,6 +36,8 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             commands::character::rename_character,
             commands::character::set_character_favorite,
             commands::character::character_mapping,
+            commands::character::save_character_mapping,
+            commands::character::reset_character_mapping,
             commands::character::stage_character_import,
             commands::character::review_character_import,
             commands::character::commit_character_import,
@@ -46,7 +48,8 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             events::AlwaysOnTopChanged,
             events::ResetFraming,
             events::ActiveCharacterChanged,
-            events::CharactersChanged
+            events::CharactersChanged,
+            events::MappingChanged
         ])
 }
 

@@ -1,0 +1,81 @@
+/* Name, target, preview and remove on the first line; the description below. */
+.row {
+  display: grid;
+  grid-template-columns: minmax(80px, 9rem) minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-divider);
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:hover {
+  border-color: var(--color-outline);
+}
+
+.input:focus-visible {
+  border-color: var(--color-accent);
+  outline: 1px solid var(--color-accent);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.description {
+  grid-column: 1 / -1;
+}
+
+.remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+.remove:hover {
+  background: var(--color-divider);
+  color: var(--color-danger);
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+}

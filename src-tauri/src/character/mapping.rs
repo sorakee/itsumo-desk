@@ -2,11 +2,14 @@
 //! plays. Packs may ship one; it is untrusted, so parsing keeps what it can and explains
 //! what it dropped, and `check` reports targets the model does not have. Missing mappings
 //! are warnings, never errors (`06-character-packs.md`).
+//!
+//! The user's edits are saved whole to `mapping.user.json` (D45): `validate` checks what the
+//! editor sends and `to_json` writes it in the file's shape.
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
-use serde_json::{Map, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 use specta::Type;
 
 use super::manifest::ModelManifest;
@@ -35,9 +38,17 @@ const CORE_SLOTS: [&str; 15] = [
 /// Mirrors `PRESET_NAMES` in `src/live2d/presets.ts`.
 const PRESETS: [&str; 5] = ["yawn", "nod", "headTilt", "lookAway", "doze"];
 
+/// The slot the idle loop plays from; it takes motions only (D45).
+const IDLE_SLOT: &str = "idle";
+
+/// Custom entry names become output tags (`[smug]`), so they stay short and plain. Both
+/// limits are mirrored in `src/windows/settings/mappingRules.ts`.
+pub const MAX_CUSTOM_NAME_CHARS: usize = 32;
+pub const MAX_DESCRIPTION_CHARS: usize = 120;
+
 /// What a slot or custom entry plays. On the wire it has the file's shape:
 /// `{ "expression": "exp_03" }`.
-#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum Target {
     Expression(String),
@@ -45,14 +56,29 @@ pub enum Target {
     Preset(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+impl Target {
+    fn is_motion(&self) -> bool {
+        matches!(self, Self::Motion(_))
+    }
+
+    /// The file's key for this kind of target, and the name it points at.
+    fn parts(&self) -> (&'static str, &str) {
+        match self {
+            Self::Expression(name) => ("expression", name),
+            Self::Motion(name) => ("motion", name),
+            Self::Preset(name) => ("preset", name),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 pub struct CustomEntry {
     pub name: String,
     pub description: String,
     pub target: Target,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct Mapping {
     pub slots: BTreeMap<String, Target>,
     pub custom: Vec<CustomEntry>,
@@ -65,6 +91,37 @@ fn non_empty(value: Option<&Value>) -> Option<&str> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|s| !s.is_empty())
+}
+
+/// A custom entry's name as the rules want it: trimmed, lower-case, with runs of spaces and
+/// hyphens as one `_`. `None` if it still breaks them: empty, too long, other characters,
+/// or a slot's name (the emotion tag would be ambiguous). Mirrored by `customName` in
+/// `mappingRules.ts`.
+pub fn custom_name(raw: &str) -> Option<String> {
+    let name = raw
+        .split(|c: char| c.is_whitespace() || c == '-')
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
+        .to_lowercase();
+    let valid = !name.is_empty()
+        && name.chars().count() <= MAX_CUSTOM_NAME_CHARS
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+        && !CORE_SLOTS.contains(&name.as_str());
+    valid.then_some(name)
+}
+
+/// A description on one line with single spaces, cut to `MAX_DESCRIPTION_CHARS`.
+fn description(raw: &str) -> String {
+    raw.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_DESCRIPTION_CHARS)
+        .collect()
 }
 
 fn target(entry: &Map<String, Value>) -> Option<Target> {
@@ -110,6 +167,9 @@ pub fn parse(json: &Value) -> (Mapping, Vec<String>) {
             continue;
         }
         match entry.as_object().and_then(target) {
+            Some(target) if slot == IDLE_SLOT && !target.is_motion() => {
+                warnings.push("mapping slot \"idle\" takes motions only; ignored".to_owned());
+            }
             Some(target) => {
                 mapping.slots.insert(slot.clone(), target);
             }
@@ -126,8 +186,15 @@ pub fn parse(json: &Value) -> (Mapping, Vec<String>) {
         let Some(entry) = entry.as_object() else {
             continue;
         };
-        let Some(name) = non_empty(entry.get("name")) else {
+        let Some(raw) = non_empty(entry.get("name")) else {
             warnings.push("a custom mapping entry has no name; ignored".to_owned());
+            continue;
+        };
+        let Some(name) = custom_name(raw) else {
+            warnings.push(format!(
+                "custom mapping \"{raw}\" needs a name of up to {MAX_CUSTOM_NAME_CHARS} letters, \
+                 digits and _ that is not a slot's; ignored"
+            ));
             continue;
         };
         if mapping.custom.iter().any(|c| c.name == name) {
@@ -138,10 +205,13 @@ pub fn parse(json: &Value) -> (Mapping, Vec<String>) {
         }
         match target(entry) {
             Some(target) => mapping.custom.push(CustomEntry {
-                name: name.to_owned(),
-                description: non_empty(entry.get("description"))
-                    .unwrap_or_default()
-                    .to_owned(),
+                description: description(
+                    entry
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                ),
+                name,
                 target,
             }),
             None => warnings.push(format!("custom mapping \"{name}\" has no target; ignored")),
@@ -162,6 +232,85 @@ pub fn parse(json: &Value) -> (Mapping, Vec<String>) {
         }
     }
     (mapping, warnings)
+}
+
+/// Checks a mapping from the editor before it is saved. Targets the model lacks are not
+/// errors here; `check` reports them, as for a pack's own mapping.
+pub fn validate(mapping: &Mapping) -> Result<(), String> {
+    for (slot, target) in &mapping.slots {
+        if !CORE_SLOTS.contains(&slot.as_str()) {
+            return Err(format!("\"{slot}\" is not a mapping slot"));
+        }
+        if slot == IDLE_SLOT && !target.is_motion() {
+            return Err("the idle slot takes motions only".to_owned());
+        }
+    }
+    let mut names = Vec::new();
+    for entry in &mapping.custom {
+        if custom_name(&entry.name).as_deref() != Some(entry.name.as_str()) {
+            return Err(format!(
+                "\"{}\" is not a valid name: use up to {MAX_CUSTOM_NAME_CHARS} lower-case \
+                 letters, digits and _, and no slot's name",
+                entry.name
+            ));
+        }
+        if names.contains(&&entry.name) {
+            return Err(format!("two custom entries are named \"{}\"", entry.name));
+        }
+        names.push(&entry.name);
+        if description(&entry.description) != entry.description {
+            return Err(format!(
+                "the description of \"{}\" must be one line of at most \
+                 {MAX_DESCRIPTION_CHARS} characters",
+                entry.name
+            ));
+        }
+    }
+    let targets = mapping
+        .slots
+        .values()
+        .chain(mapping.custom.iter().map(|entry| &entry.target));
+    for target in targets {
+        let (kind, name) = target.parts();
+        // Motion groups may have an empty name; nothing else may.
+        if (!target.is_motion() && name.trim().is_empty()) || name.chars().any(char::is_control) {
+            return Err(format!("a mapping target has an invalid {kind} name"));
+        }
+    }
+    if mapping
+        .parameters
+        .iter()
+        .any(|(role, id)| role.trim().is_empty() || id.trim().is_empty())
+    {
+        return Err("a parameter role or id is empty".to_owned());
+    }
+    Ok(())
+}
+
+/// The mapping in `mapping.json`'s shape, for `mapping.user.json`.
+pub fn to_json(mapping: &Mapping) -> Value {
+    let slots: Map<String, Value> = mapping
+        .slots
+        .iter()
+        .map(|(slot, target)| {
+            let (kind, name) = target.parts();
+            (slot.clone(), json!({ kind: name }))
+        })
+        .collect();
+    let custom: Vec<Value> = mapping
+        .custom
+        .iter()
+        .map(|entry| {
+            let (kind, name) = entry.target.parts();
+            json!({ "name": entry.name, "description": entry.description, kind: name })
+        })
+        .collect();
+    json!({
+        "schema": SCHEMA,
+        "slots": slots,
+        "custom": custom,
+        "parameters": mapping.parameters,
+    })
 }
 
 fn missing(target: &Target, manifest: &ModelManifest) -> Option<String> {
@@ -298,6 +447,109 @@ mod tests {
                 "parameters": {}
             })
         );
+    }
+
+    #[test]
+    fn custom_names_and_descriptions_follow_the_rules() {
+        let long = "x".repeat(MAX_DESCRIPTION_CHARS + 10);
+        let (mapping, warnings) = parse(&json!({
+            "schema": 1,
+            "slots": { "idle": { "expression": "exp_03" } },
+            "custom": [
+                { "name": " Smug  Face ", "description": "half-lidded\ngrin", "expression": "a" },
+                { "name": "smug-face", "expression": "b" },
+                { "name": "joy", "expression": "c" },
+                { "name": "スマグ", "expression": "d" },
+                { "name": "long", "description": long, "motion": "" }
+            ]
+        }));
+        let names: Vec<_> = mapping.custom.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["smug_face", "long"]);
+        assert_eq!(mapping.custom[0].description, "half-lidded grin");
+        assert_eq!(
+            mapping.custom[1].description.chars().count(),
+            MAX_DESCRIPTION_CHARS
+        );
+        assert!(mapping.slots.is_empty());
+        // idle, duplicate, slot name, non-ASCII
+        assert_eq!(warnings.len(), 4, "{warnings:?}");
+        assert_eq!(validate(&mapping), Ok(()));
+    }
+
+    #[test]
+    fn validate_rejects_what_the_editor_must_not_send() {
+        let entry = |name: &str, description: &str| CustomEntry {
+            name: name.into(),
+            description: description.into(),
+            target: Target::Expression("a".into()),
+        };
+        let with_slot = |slot: &str, target: Target| Mapping {
+            slots: BTreeMap::from([(slot.to_owned(), target)]),
+            ..Mapping::default()
+        };
+        let with_custom = |custom: Vec<CustomEntry>| Mapping {
+            custom,
+            ..Mapping::default()
+        };
+        assert_eq!(validate(&Mapping::default()), Ok(()));
+        assert_eq!(
+            validate(&with_slot("idle", Target::Motion(String::new()))),
+            Ok(())
+        );
+        for invalid in [
+            with_slot("dance", Target::Motion("Dance".into())),
+            with_slot("idle", Target::Preset("doze".into())),
+            with_slot("joy", Target::Expression(" ".into())),
+            with_slot("joy", Target::Expression("a\nb".into())),
+            with_custom(vec![entry("Smug", "")]),
+            with_custom(vec![entry("joy", "")]),
+            with_custom(vec![entry("smug", " padded")]),
+            with_custom(vec![entry("smug", &"x".repeat(MAX_DESCRIPTION_CHARS + 1))]),
+            with_custom(vec![entry("smug", ""), entry("smug", "")]),
+            Mapping {
+                parameters: BTreeMap::from([("ParamAngleX".to_owned(), String::new())]),
+                ..Mapping::default()
+            },
+        ] {
+            assert!(validate(&invalid).is_err(), "{invalid:?}");
+        }
+    }
+
+    #[test]
+    fn written_json_parses_back() {
+        let mapping = Mapping {
+            slots: BTreeMap::from([
+                ("idle".to_owned(), Target::Motion(String::new())),
+                ("joy".to_owned(), Target::Expression("笑顔".into())),
+                ("yawn".to_owned(), Target::Preset("yawn".into())),
+            ]),
+            custom: vec![CustomEntry {
+                name: "smug".into(),
+                description: "half-lidded grin".into(),
+                target: Target::Motion("Smug".into()),
+            }],
+            parameters: BTreeMap::from([("ParamAngleX".to_owned(), "Param72".to_owned())]),
+        };
+        let written = to_json(&mapping);
+        assert_eq!(
+            written["custom"][0],
+            json!({ "name": "smug", "description": "half-lidded grin", "motion": "Smug" })
+        );
+        let (parsed, warnings) = parse(&written);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(parsed, mapping);
+    }
+
+    #[test]
+    fn the_editor_sends_targets_in_the_file_shape() {
+        let mapping: Mapping = serde_json::from_value(json!({
+            "slots": { "joy": { "expression": "exp_03" } },
+            "custom": [{ "name": "smug", "description": "", "target": { "motion": "" } }],
+            "parameters": {}
+        }))
+        .expect("deserialises");
+        assert_eq!(mapping.slots["joy"], Target::Expression("exp_03".into()));
+        assert_eq!(mapping.custom[0].target, Target::Motion(String::new()));
     }
 
     #[test]

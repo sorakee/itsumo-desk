@@ -29,6 +29,14 @@ export interface Point {
   y: number;
 }
 
+/**
+ * The parts of a character's mapping (`Mapping` in `@/ipc`) the stage plays. Kept narrow so
+ * the stage does not depend on the wire types.
+ */
+export interface StageMapping {
+  slots: Partial<Record<string, { motion?: string }>>;
+}
+
 export interface Stage {
   /**
    * Replaces the current model and resolves with the new model's manifest. `framing`
@@ -62,6 +70,11 @@ export interface Stage {
   setExpression(name: string | null): void;
   /** Plays motion `index` of the motion group `group` once. */
   playMotion(group: string, index: number): void;
+  /**
+   * Uses the character's mapping, or none, for the model on stage and the ones loaded
+   * after it. So far it decides the idle loop's motion group.
+   */
+  setMapping(mapping: StageMapping | null): void;
   /** Plays a parameter preset, replacing any playing one. */
   playPreset(name: PresetName): void;
   /** Fades out the playing preset, e.g. ends a doze. */
@@ -123,6 +136,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const hitListeners = new Set<(hit: boolean) => void>();
   let current: OnStage | undefined;
   let source: ModelSource | undefined;
+  let mapping: StageMapping | null = null;
   // What the last load asked for, kept up to date so a context-loss reload looks the same.
   let requestedFraming: Framing | undefined;
   let pointer: Point | null = null;
@@ -369,6 +383,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       current?.model.playMotion(group, index);
     },
 
+    setMapping(next) {
+      mapping = next;
+      current?.model.setIdleGroup(mapping?.slots.idle?.motion);
+    },
+
     playPreset(name) {
       current?.life.presets.play(name);
     },
@@ -396,6 +415,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // Vertex positions are only valid once the model has been updated.
       loaded.model.update(0);
       const { model, manifest } = loaded;
+      model.setIdleGroup(mapping?.slots.idle?.motion);
       const drawables = model.drawableBounds();
       const extent = unionOf(drawables);
       const headArea = manifest.hitAreas.find((h) => /head|face/i.test(`${h.id} ${h.name}`));

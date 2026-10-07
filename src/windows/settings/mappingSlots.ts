@@ -1,6 +1,7 @@
 // The mapping's core slots as the settings window shows them.
 
-import type { Target } from "@/ipc";
+import type { Mapping, Target } from "@/ipc";
+import type { PresetName } from "@/live2d/presets";
 
 export interface SlotInfo {
   id: string;
@@ -29,19 +30,53 @@ export const EMOTION_SLOTS: readonly SlotInfo[] = [
   { id: "shy", label: "Shy" },
 ];
 
+export const PRESET_LABELS: Record<PresetName, string> = {
+  yawn: "Yawn",
+  nod: "Nod",
+  headTilt: "Head tilt",
+  lookAway: "Look away",
+  doze: "Doze",
+};
+
+/** What a character without a mapping starts editing from. */
+export const EMPTY_MAPPING: Mapping = { slots: {}, custom: [], parameters: {} };
+
 /** A motion group's name for display; model3.json allows an empty one. */
 export function groupLabel(name: string): string {
   return name === "" ? "(unnamed)" : name;
 }
 
-export interface TargetLabel {
-  kind: "Expression" | "Motion" | "Preset";
-  name: string;
+export type TargetKind = "expression" | "motion" | "preset";
+
+/** A target's kind and the name it points at. */
+export function targetParts(target: Target): { kind: TargetKind; name: string } {
+  // The generated union types the other variants' keys as optional, so `in` cannot narrow.
+  if (target.expression !== undefined) return { kind: "expression", name: target.expression };
+  if (target.motion !== undefined) return { kind: "motion", name: target.motion };
+  return { kind: "preset", name: target.preset };
 }
 
-export function describeTarget(target: Target): TargetLabel {
-  // The generated union types the other variants' keys as optional, so `in` cannot narrow.
-  if (target.expression !== undefined) return { kind: "Expression", name: target.expression };
-  if (target.motion !== undefined) return { kind: "Motion", name: groupLabel(target.motion) };
-  return { kind: "Preset", name: target.preset };
+export function targetOf(kind: TargetKind, name: string): Target {
+  switch (kind) {
+    case "expression":
+      return { expression: name };
+    case "motion":
+      return { motion: name };
+    case "preset":
+      return { preset: name };
+  }
+}
+
+/** A target as one string, e.g. for a `<select>` value; the empty string is no target. */
+export function targetKey(target: Target | undefined): string {
+  if (!target) return "";
+  const { kind, name } = targetParts(target);
+  return `${kind}:${name}`;
+}
+
+export function parseTargetKey(key: string): Target | undefined {
+  const colon = key.indexOf(":");
+  const kind = key.slice(0, colon);
+  if (kind !== "expression" && kind !== "motion" && kind !== "preset") return undefined;
+  return targetOf(kind, key.slice(colon + 1));
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   BEHAVIOUR_SLOTS,
-  describeTarget,
   EMOTION_SLOTS,
   groupLabel,
+  parseTargetKey,
+  targetKey,
+  targetParts,
 } from "@/windows/settings/mappingSlots";
 
 describe("mapping slots", () => {
@@ -13,18 +15,22 @@ describe("mapping slots", () => {
     expect(new Set(ids).size).toBe(15);
   });
 
-  it("describes each kind of target", () => {
-    expect(describeTarget({ expression: "exp_03" })).toEqual({
-      kind: "Expression",
-      name: "exp_03",
-    });
-    expect(describeTarget({ motion: "Idle" })).toEqual({ kind: "Motion", name: "Idle" });
-    expect(describeTarget({ preset: "yawn" })).toEqual({ kind: "Preset", name: "yawn" });
+  it("splits each kind of target", () => {
+    expect(targetParts({ expression: "exp_03" })).toEqual({ kind: "expression", name: "exp_03" });
+    expect(targetParts({ motion: "" })).toEqual({ kind: "motion", name: "" });
+    expect(targetParts({ preset: "yawn" })).toEqual({ kind: "preset", name: "yawn" });
   });
 
   it("names the unnamed motion group", () => {
     expect(groupLabel("")).toBe("(unnamed)");
-    expect(describeTarget({ motion: "" }).name).toBe("(unnamed)");
     expect(groupLabel("Tap")).toBe("Tap");
+  });
+
+  it("round-trips targets through their keys", () => {
+    for (const target of [{ expression: "a:b" }, { motion: "" }, { preset: "doze" }]) {
+      expect(parseTargetKey(targetKey(target))).toEqual(target);
+    }
+    expect(targetKey(undefined)).toBe("");
+    expect(parseTargetKey("")).toBeUndefined();
   });
 });

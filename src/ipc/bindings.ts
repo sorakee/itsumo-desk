@@ -38,6 +38,11 @@ export const commands = {
 	/**  The `model3.json`, served by the `character` URI scheme. */
 	modelUrl: string,
 	extras: ModelExtras,
+	/**
+	 *  The mapping in effect: the user's edits if any, else the pack's (D45). Later changes
+	 *  arrive as `MappingChanged`, so the model need not reload.
+	 */
+	mapping: Mapping | null,
 } | null, AppError>(__TAURI_INVOKE("active_character")),
 	/**  Switches the companion to an installed character, or to none. */
 	setActiveCharacter: (id: string | null) => typedError<null, AppError>(__TAURI_INVOKE("set_active_character", { id })),
@@ -52,6 +57,10 @@ export const commands = {
 	setCharacterFavorite: (id: string, favorite: boolean) => typedError<null, AppError>(__TAURI_INVOKE("set_character_favorite", { id, favorite })),
 	/**  An installed character's model and mapping, for the mapping editor. */
 	characterMapping: (id: string) => typedError<CharacterMapping, AppError>(__TAURI_INVOKE("character_mapping", { id })),
+	/**  Saves the user's edits to a character's mapping and returns it as the editor shows it. */
+	saveCharacterMapping: (id: string, mapping: Mapping) => typedError<CharacterMapping, AppError>(__TAURI_INVOKE("save_character_mapping", { id, mapping })),
+	/**  Drops the user's edits to a character's mapping, going back to the pack's own. */
+	resetCharacterMapping: (id: string) => typedError<CharacterMapping, AppError>(__TAURI_INVOKE("reset_character_mapping", { id })),
 	/**
 	 *  Lets the user pick a pack or model, then copies and validates it in staging. `None` if
 	 *  the dialog was cancelled.
@@ -80,6 +89,7 @@ export const events = {
 	alwaysOnTopChanged: makeEvent<AlwaysOnTopChanged>("always-on-top-changed"),
 	charactersChanged: makeEvent<CharactersChanged>("characters-changed"),
 	cursorMoved: makeEvent<CursorMoved>("cursor-moved"),
+	mappingChanged: makeEvent<MappingChanged>("mapping-changed"),
 	resetFraming: makeEvent<ResetFraming>("reset-framing"),
 };
 
@@ -90,6 +100,11 @@ export type ActiveCharacter = {
 	/**  The `model3.json`, served by the `character` URI scheme. */
 	modelUrl: string,
 	extras: ModelExtras,
+	/**
+	 *  The mapping in effect: the user's edits if any, else the pack's (D45). Later changes
+	 *  arrive as `MappingChanged`, so the model need not reload.
+	 */
+	mapping: Mapping | null,
 };
 
 /**  The active character changed, was replaced by a re-import, or was removed (`None`). */
@@ -121,8 +136,10 @@ export type CharacterMapping = {
 	/**  The `model3.json`, served by the `character` URI scheme. */
 	modelUrl: string,
 	extras: ModelExtras,
-	/**  `None` if the pack has no usable `mapping.json`. */
+	/**  `None` if the pack has no usable mapping. */
 	mapping: Mapping | null,
+	/**  Whether the mapping is the user's edits (`mapping.user.json`) rather than the pack's. */
+	customized: boolean,
 	warnings: string[],
 };
 
@@ -215,6 +232,15 @@ export type Mapping = {
 	custom: CustomEntry[],
 	/**  Parameter role → model parameter id, for models with non-standard ids. */
 	parameters: { [key in string]: string },
+};
+
+/**
+ *  The user saved or reset a character's mapping. Carries the mapping now in effect, so the
+ *  companion applies it without reloading the model.
+ */
+export type MappingChanged = {
+	id: string,
+	mapping: Mapping | null,
 };
 
 /**

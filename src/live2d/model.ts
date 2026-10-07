@@ -15,6 +15,7 @@ import {
   type ModelLayout,
   type ModelSettings,
   type MotionEntry,
+  type MotionGroup,
   parseModelSettings,
   withExtras,
 } from "@/live2d/modelSettings";
@@ -163,6 +164,9 @@ export class Live2DModel extends CubismUserModel {
   /** From model3.json, when the author set one. */
   layout: ModelLayout | undefined;
   private idle: IdleLoop | undefined;
+  // The group the idle loop plays from, and which request for its clips is the latest.
+  private idleSource: MotionGroup | undefined;
+  private idleRequest = 0;
   private expressions: Expressions | undefined;
   // Motions played on request (previews now, slots later), over the idle loop.
   private readonly triggered = new CubismMotionManager();
@@ -196,17 +200,12 @@ export class Live2DModel extends CubismUserModel {
     const at = (path: string | undefined) =>
       path === undefined ? undefined : resolve(source, path);
 
-    const idleMotions = idleGroup(settings.motionGroups)?.motions ?? [];
-
-    const [moc, bitmaps, physics, pose, displayInfo, idleBytes] = await Promise.all([
+    const [moc, bitmaps, physics, pose, displayInfo] = await Promise.all([
       fetchBytes(resolve(source, settings.moc), signal),
       Promise.all(settings.textures.map((path) => fetchBitmap(resolve(source, path), signal))),
       fetchOptional(at(settings.physics), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.pose), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.displayInfo), signal, (r) => r.json()),
-      Promise.all(
-        idleMotions.map((m) => fetchOptional(at(m.file), signal, (r) => r.arrayBuffer())),
-      ),
     ]);
 
     const model = new Live2DModel(gl, source, settings);
@@ -222,14 +221,8 @@ export class Live2DModel extends CubismUserModel {
       model.expressions = new Expressions((name) => model.fetchExpression(name));
       model.centerCanvas();
       model.layout = settings.layout;
-      model.idle = new IdleLoop(
-        model._motionManager,
-        idleMotions.flatMap((entry, i) => {
-          const bytes = idleBytes[i];
-          const clip = bytes && createClip(bytes, entry, manifest);
-          return clip ? [clip] : [];
-        }),
-      );
+      // Rests until `setIdleGroup` gives it clips.
+      model.idle = new IdleLoop(model._motionManager, []);
 
       if (physics) {
         model.loadPhysics(physics, physics.byteLength);
@@ -329,6 +322,21 @@ export class Live2DModel extends CubismUserModel {
   setExpression(name: string | null): void {
     if (name !== null && !this.settings.expressions.some((e) => e.name === name)) return;
     this.expressions?.set(name);
+  }
+
+  /**
+   * Plays the idle loop from the group the mapping's `idle` slot names (`mapped`), or from
+   * the "Idle" group when the model has no such group. The clips load in the background.
+   */
+  setIdleGroup(mapped: string | undefined): void {
+    const group = idleGroup(this.settings.motionGroups, mapped);
+    if (group === this.idleSource && this.idleRequest > 0) return;
+    this.idleSource = group;
+    const request = ++this.idleRequest;
+    Promise.all((group?.motions ?? []).map((entry) => this.loadClip(entry))).then((clips) => {
+      if (request !== this.idleRequest || this.loads.signal.aborted) return;
+      this.idle?.setClips(clips.filter((clip) => clip !== undefined));
+    });
   }
 
   /**
