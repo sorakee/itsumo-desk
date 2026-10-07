@@ -34,6 +34,9 @@ const parameters = [
   { id: "ParamEyeBallX", min: -1, max: 1, default: 0 },
   { id: "EyeL", min: 0, max: 1, default: 1 },
   { id: "ParamBreath", min: 0, max: 1, default: 0 },
+  // Non-standard parameters a mapping can give a role to.
+  { id: "Param72", min: -30, max: 30, default: 0 },
+  { id: "PupilX", min: -10, max: 10, default: 0 },
 ];
 
 function setup() {
@@ -103,6 +106,26 @@ describe("Life", () => {
     }
     expect(ownMin).toBe(0);
     expect(motionMin).toBe(1);
+  });
+
+  it("drives the parameters the mapping gives a role", () => {
+    const { values, life, run } = setup();
+    life.setRoles({ ParamAngleX: "Param72", ParamEyeBallX: "PupilX" });
+    run(2, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, cursorNear: true, motionBlinks: false });
+
+    expect(values[0]).toBe(0);
+    expect(values[1]).toBe(0);
+    expect(values[4]).toBeGreaterThan(18);
+    // Eyeballs count in half-ranges from the middle, so a wider range turns as far.
+    expect(values[5]).toBeGreaterThan(8);
+  });
+
+  it("falls back to the standard parameter when the mapped one is missing", () => {
+    const { values, life, run } = setup();
+    life.setRoles({ ParamAngleX: "ParamMissing" });
+    run(2, { cursor: { x: 1, y: 0 }, cursorStillFor: 0, cursorNear: true, motionBlinks: false });
+
+    expect(values[0]).toBeGreaterThan(18);
   });
 
   it("lets a preset override the gaze", () => {

@@ -232,6 +232,8 @@ export type Mapping = {
 	custom: CustomEntry[],
 	/**  Parameter role → model parameter id, for models with non-standard ids. */
 	parameters: { [key in string]: string },
+	/**  Expressions applied at rest, e.g. toggles that hide a watermark or pick an outfit. */
+	baseExpressions: string[],
 };
 
 /**

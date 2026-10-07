@@ -69,4 +69,25 @@ describe("ModelParameters", () => {
 
     expect(params.get("ParamEyeLOpen")).toBe(0.25);
   });
+
+  it("sets from the middle of the range in half-ranges", () => {
+    const model = fakeModel();
+    const params = new ModelParameters(model, { parameters });
+
+    params.setCentered("ParamAngleX", 0.5);
+    params.setCentered("ParamEyeLOpen", -1, 0.5);
+
+    expect(params.get("ParamAngleX")).toBe(15);
+    expect(params.get("ParamEyeLOpen")).toBe(0.5);
+  });
+
+  it("adds in the parameter's own units", () => {
+    const model = fakeModel();
+    const params = new ModelParameters(model, { parameters });
+
+    params.add("ParamAngleX", 12);
+    params.add("ParamMissing", 1);
+
+    expect(params.get("ParamAngleX")).toBe(12);
+  });
 });

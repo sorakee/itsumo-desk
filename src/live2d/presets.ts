@@ -8,9 +8,10 @@ export type PresetTarget = StandardParameter | "eyes" | "mouth";
 
 /**
  * How a track's value applies: `offset` adds half-ranges (see `ModelParameters.offset`),
- * `set` replaces the value, `scale` multiplies it.
+ * `set` replaces the value, `centered` replaces it with half-ranges from the middle of the
+ * range (see `ModelParameters.setCentered`), `scale` multiplies it.
  */
-type Mode = "offset" | "set" | "scale";
+type Mode = "offset" | "set" | "centered" | "scale";
 
 type Key = readonly [seconds: number, value: number];
 
@@ -105,8 +106,8 @@ const PRESETS: Record<PresetName, Preset> = {
     fadeIn: 0.15,
     fadeOut: 0.4,
     tracks: [
-      { target: "ParamEyeBallX", mode: "set", keys: [[0, -0.8]] },
-      { target: "ParamEyeBallY", mode: "set", keys: [[0, -0.2]] },
+      { target: "ParamEyeBallX", mode: "centered", keys: [[0, -0.8]] },
+      { target: "ParamEyeBallY", mode: "centered", keys: [[0, -0.2]] },
       { target: "ParamAngleX", mode: "offset", keys: hold(-0.45, 0.6, 2.6, 3.2) },
       { target: "ParamAngleY", mode: "offset", keys: hold(-0.12, 0.6, 2.6, 3.2) },
     ],
@@ -187,6 +188,7 @@ export interface PresetOutput {
   resolve(target: PresetTarget): readonly string[];
   offset(id: string, amount: number): void;
   set(id: string, value: number, weight: number): void;
+  setCentered(id: string, amount: number, weight: number): void;
   multiply(id: string, factor: number): void;
 }
 
@@ -247,6 +249,9 @@ export class PresetPlayer {
               break;
             case "set":
               output.set(id, value, weight);
+              break;
+            case "centered":
+              output.setCentered(id, value, weight);
               break;
             case "scale":
               output.multiply(id, 1 + (value - 1) * weight);

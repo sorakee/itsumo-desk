@@ -39,7 +39,12 @@ export const PRESET_LABELS: Record<PresetName, string> = {
 };
 
 /** What a character without a mapping starts editing from. */
-export const EMPTY_MAPPING: Mapping = { slots: {}, custom: [], parameters: {} };
+export const EMPTY_MAPPING: Mapping = {
+  slots: {},
+  custom: [],
+  parameters: {},
+  baseExpressions: [],
+};
 
 /** A motion group's name for display; model3.json allows an empty one. */
 export function groupLabel(name: string): string {
