@@ -40,6 +40,7 @@ function recorder(missing: PresetTarget[] = ["mouth"]): PresetOutput & { writes:
       missing.includes(target) ? [] : target === "eyes" ? ["EyeL", "EyeR"] : [target],
     offset: (id, amount) => writes.push(["offset", id, amount]),
     set: (id, value, weight) => writes.push(["set", id, value, weight]),
+    setCentered: (id, amount, weight) => writes.push(["centered", id, amount, weight]),
     multiply: (id, factor) => writes.push(["multiply", id, factor]),
   };
 }
@@ -82,7 +83,7 @@ describe("PresetPlayer", () => {
     player.apply(output);
 
     const eye = output.writes.find(([, id]) => id === "ParamEyeBallX");
-    expect(eye?.[0]).toBe("set");
+    expect(eye?.[0]).toBe("centered");
     expect(eye?.[2]).toBe(-0.8);
     expect(eye?.[3]).toBeCloseTo(1 / 3);
   });

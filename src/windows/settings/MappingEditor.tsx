@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { CustomEntry, Mapping, Target } from "@/ipc";
 import type { ModelManifest } from "@/live2d/manifest";
+import { BaseExpressionList } from "@/windows/settings/BaseExpressionList";
 import { Button } from "@/windows/settings/Button";
 import { CustomEntryRow } from "@/windows/settings/CustomEntryRow";
 import { BEHAVIOUR_SLOTS, EMOTION_SLOTS, type SlotInfo } from "@/windows/settings/mappingSlots";
 import { NewCustomEntry } from "@/windows/settings/NewCustomEntry";
 import { Panel } from "@/windows/settings/Panel";
+import { ParameterRoleList } from "@/windows/settings/ParameterRoleList";
 import { PreviewButton } from "@/windows/settings/PreviewButton";
 import { TargetPicker } from "@/windows/settings/TargetPicker";
 import type { PreviewActions } from "@/windows/settings/usePreviewActions";
@@ -44,7 +46,6 @@ export function MappingEditor({
   onReset,
 }: MappingEditorProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const parameters = Object.entries(mapping.parameters);
   const names = mapping.custom.map((entry) => entry.name);
 
   function setSlot(slot: string, target: Target | undefined) {
@@ -121,19 +122,25 @@ export function MappingEditor({
         onAdd={(entry) => setCustom([...mapping.custom, entry])}
       />
 
-      {parameters.length > 0 && (
-        <>
-          <h3 className={styles.heading}>Parameters</h3>
-          <dl className={styles.parameters}>
-            {parameters.map(([role, id]) => (
-              <div key={role} className={styles.parameter}>
-                <dt className={styles.slotName}>{role}</dt>
-                <dd className={styles.parameterId}>{id}</dd>
-              </div>
-            ))}
-          </dl>
-        </>
-      )}
+      <h3 className={styles.heading}>Base expressions</h3>
+      <p className={styles.note}>
+        Worn at rest, under the emotions: toggles such as an outfit, a prop or a hidden watermark.
+      </p>
+      <BaseExpressionList
+        names={mapping.baseExpressions}
+        manifest={manifest}
+        onChange={(baseExpressions) => onChange({ ...mapping, baseExpressions })}
+      />
+
+      <h3 className={styles.heading}>Parameters</h3>
+      <p className={styles.note}>
+        What the gaze, sway and presets move, for models whose own parameters play these parts.
+      </p>
+      <ParameterRoleList
+        roles={mapping.parameters}
+        manifest={manifest}
+        onChange={(parameters) => onChange({ ...mapping, parameters })}
+      />
 
       {warnings.length > 0 && (
         <ul className={styles.warnings}>

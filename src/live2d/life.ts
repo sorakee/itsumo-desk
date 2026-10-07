@@ -1,11 +1,28 @@
 // Procedural life (layer 2) and parameter presets (layer 4), applied each frame on top of
 // whatever the idle motion left. Everything writes through `ModelParameters`, so parameters
-// the model lacks are skipped.
+// the model lacks are skipped. Standard parameters go through the mapping's roles first, so a
+// model with its own ids for them can still be driven (D45).
 
 import { Gaze, type GazeInput } from "@/live2d/gaze";
-import type { ModelManifest } from "@/live2d/manifest";
+import type { ModelManifest, StandardParameter } from "@/live2d/manifest";
 import type { ModelParameters } from "@/live2d/parameters";
 import { PresetPlayer, type PresetTarget } from "@/live2d/presets";
+
+/** The standard parameters the life layers and presets write: the roles a mapping can move. */
+export const DRIVEN_PARAMETERS = [
+  "ParamAngleX",
+  "ParamAngleY",
+  "ParamAngleZ",
+  "ParamBodyAngleX",
+  "ParamBodyAngleY",
+  "ParamBodyAngleZ",
+  "ParamEyeBallX",
+  "ParamEyeBallY",
+  "ParamBreath",
+] as const satisfies readonly StandardParameter[];
+
+/** Standard parameter id → the model's parameter that plays its role. */
+export type ParameterRoles = Readonly<Partial<Record<string, string>>>;
 
 // Blink timing in seconds.
 const BLINK_INTERVAL = [2, 6] as const;
@@ -75,6 +92,7 @@ export class Life {
   private readonly blink: Blink;
   private readonly phases: number[];
   private time = 0;
+  private roles: ParameterRoles = {};
 
   constructor(
     private readonly manifest: Pick<ModelManifest, "eyeBlinkIds" | "lipSyncIds">,
@@ -86,30 +104,36 @@ export class Life {
     this.phases = SWAY.flatMap(() => [random(), random()].map((r) => r * 2 * Math.PI));
   }
 
+  /** Uses the mapping's parameter roles from now on. */
+  setRoles(roles: ParameterRoles): void {
+    this.roles = roles;
+  }
+
   /** Advances by `deltaSeconds` and writes this frame's layers 2 and 4 to `params`. */
   update(deltaSeconds: number, input: LifeInput, params: ModelParameters): void {
     this.time += deltaSeconds;
     this.gaze.update(deltaSeconds, input);
     const eyesOpen = this.blink.update(deltaSeconds);
     this.presets.update(deltaSeconds);
+    const role = (id: StandardParameter) => this.role(id, params);
 
     const breath = 0.5 + 0.5 * Math.sin((2 * Math.PI * this.time) / BREATH_PERIOD);
-    params.offset("ParamBreath", breath);
+    params.offset(role("ParamBreath"), breath);
 
     SWAY.forEach(({ id, amplitude, periods: [slow, fast] }, i) => {
       const wave =
         0.7 * Math.sin((2 * Math.PI * this.time) / slow + (this.phases[2 * i] ?? 0)) +
         0.3 * Math.sin((2 * Math.PI * this.time) / fast + (this.phases[2 * i + 1] ?? 0));
-      params.offset(id, amplitude * wave);
+      params.offset(role(id), amplitude * wave);
     });
 
     const { head, body, eyes } = this.gaze;
-    params.offset("ParamAngleX", head.x * HEAD_TURN);
-    params.offset("ParamAngleY", head.y * HEAD_TURN);
-    params.offset("ParamAngleZ", -head.x * head.y * HEAD_TILT);
-    params.offset("ParamBodyAngleX", body.x * BODY_TURN);
-    params.set("ParamEyeBallX", eyes.x, EYE_WEIGHT);
-    params.set("ParamEyeBallY", eyes.y, EYE_WEIGHT);
+    params.offset(role("ParamAngleX"), head.x * HEAD_TURN);
+    params.offset(role("ParamAngleY"), head.y * HEAD_TURN);
+    params.offset(role("ParamAngleZ"), -head.x * head.y * HEAD_TILT);
+    params.offset(role("ParamBodyAngleX"), body.x * BODY_TURN);
+    params.setCentered(role("ParamEyeBallX"), eyes.x, EYE_WEIGHT);
+    params.setCentered(role("ParamEyeBallY"), eyes.y, EYE_WEIGHT);
 
     if (!input.motionBlinks) {
       for (const id of this.manifest.eyeBlinkIds) {
@@ -118,21 +142,28 @@ export class Life {
     }
 
     this.presets.apply({
-      resolve: (target) => this.resolve(target),
+      resolve: (target) => this.resolve(target, params),
       offset: (id, amount) => params.offset(id, amount),
       set: (id, value, weight) => params.set(id, value, weight),
+      setCentered: (id, amount, weight) => params.setCentered(id, amount, weight),
       multiply: (id, factor) => params.multiply(id, factor),
     });
   }
 
-  private resolve(target: PresetTarget): readonly string[] {
+  /** The parameter playing `id`'s role: the mapped one if the model has it, else `id`. */
+  private role(id: StandardParameter, params: ModelParameters): string {
+    const mapped = this.roles[id];
+    return mapped !== undefined && params.has(mapped) ? mapped : id;
+  }
+
+  private resolve(target: PresetTarget, params: ModelParameters): readonly string[] {
     switch (target) {
       case "eyes":
         return this.manifest.eyeBlinkIds;
       case "mouth":
         return this.manifest.lipSyncIds;
       default:
-        return [target];
+        return [this.role(target, params)];
     }
   }
 }

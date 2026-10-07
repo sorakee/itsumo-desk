@@ -41,24 +41,6 @@
   white-space: nowrap;
 }
 
-.parameters {
-  margin: 0;
-}
-
-.parameter {
-  display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr);
-  gap: 8px;
-  padding: 3px 0;
-}
-
-.parameterId {
-  margin: 0;
-  overflow: hidden;
-  font-size: 0.875rem;
-  text-overflow: ellipsis;
-}
-
 .saveError {
   margin: 0 0 12px;
   padding: 8px 12px;

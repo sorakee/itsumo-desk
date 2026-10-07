@@ -5,6 +5,7 @@ import { CubismMoc } from "@cubism/framework/model/cubismmoc";
 import type { CubismModel } from "@cubism/framework/model/cubismmodel";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
 import { CubismMotionManager } from "@cubism/framework/motion/cubismmotionmanager";
+import { BaseExpressions } from "@/live2d/baseExpressions";
 import { CUBISM_SHADER_PATH, startCubism } from "@/live2d/cubism";
 import { Expressions } from "@/live2d/expressions";
 import { type Bounds, boundsOf } from "@/live2d/framing";
@@ -19,6 +20,7 @@ import {
   parseModelSettings,
   withExtras,
 } from "@/live2d/modelSettings";
+import type { ModelParameters } from "@/live2d/parameters";
 
 /** Where a model lives: the URL of its `model3.json`. Other files resolve relative to it. */
 export interface ModelSource {
@@ -168,6 +170,7 @@ export class Live2DModel extends CubismUserModel {
   private idleSource: MotionGroup | undefined;
   private idleRequest = 0;
   private expressions: Expressions | undefined;
+  private baseExpressions: BaseExpressions | undefined;
   // Motions played on request (previews now, slots later), over the idle loop.
   private readonly triggered = new CubismMotionManager();
   private triggeredClip: Clip | undefined;
@@ -219,6 +222,7 @@ export class Live2DModel extends CubismUserModel {
       const manifest = manifestOf(settings, model.getModel().getModel(), displayInfo);
       model.manifest = manifest;
       model.expressions = new Expressions((name) => model.fetchExpression(name));
+      model.baseExpressions = new BaseExpressions((name) => model.fetchExpression(name));
       model.centerCanvas();
       model.layout = settings.layout;
       // Rests until `setIdleGroup` gives it clips.
@@ -325,6 +329,16 @@ export class Live2DModel extends CubismUserModel {
   }
 
   /**
+   * Applies the expressions `names` at rest, under the one `setExpression` shows, fading them
+   * in and the others out; with `immediate`, at once. Unknown names are ignored. Resolves once
+   * their files have loaded.
+   */
+  setBaseExpressions(names: readonly string[], immediate = false): Promise<void> {
+    const known = names.filter((name) => this.settings.expressions.some((e) => e.name === name));
+    return this.baseExpressions?.set(known, immediate) ?? Promise.resolve();
+  }
+
+  /**
    * Plays the idle loop from the group the mapping's `idle` slot names (`mapped`), or from
    * the "Idle" group when the model has no such group. The clips load in the background.
    */
@@ -354,18 +368,20 @@ export class Live2DModel extends CubismUserModel {
   }
 
   /**
-   * Plays the motions (life layers 1 and 3) on the default pose. Every frame starts from
-   * the defaults, so the layers written on top before `update` do not accumulate and a
-   * motion fades in from, and back out to, the rest pose rather than freezing where it
-   * stopped. `quiet` fades the idle motion out, e.g. while a preset plays; so does a
-   * triggered motion.
+   * Plays the motions, then the base expressions and layer 3, on the default pose. Every
+   * frame starts from the defaults, so the layers written on top before `update` do not
+   * accumulate and a motion fades in from, and back out to, the rest pose rather than
+   * freezing where it stopped. `quiet` fades the idle motion out, e.g. while a preset plays;
+   * so does a triggered motion. Base expressions write through `params`.
    */
-  updateMotion(deltaSeconds: number, quiet: boolean): void {
+  updateMotion(deltaSeconds: number, quiet: boolean, params: ModelParameters): void {
     const model = this.getModel();
     const { parameters } = model.getModel();
     parameters.values.set(parameters.defaultValues);
     this.idle?.update(model, deltaSeconds, quiet || !this.triggered.isFinished());
     this.triggered.updateMotion(model, deltaSeconds);
+    // Layer 3's manager reads the values it finds, so its expression lands on top of these.
+    this.baseExpressions?.update(deltaSeconds, params);
     this.expressions?.update(model, deltaSeconds);
   }
 
@@ -416,6 +432,8 @@ export class Live2DModel extends CubismUserModel {
     this.idle = undefined;
     this.expressions?.release();
     this.expressions = undefined;
+    this.baseExpressions?.release();
+    this.baseExpressions = undefined;
     this.triggered.stopAllMotions();
     this.triggeredClip = undefined;
     for (const clip of this.clips.values()) {

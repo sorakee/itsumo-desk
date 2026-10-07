@@ -4,7 +4,8 @@
 //! are warnings, never errors (`06-character-packs.md`).
 //!
 //! The user's edits are saved whole to `mapping.user.json` (D45): `validate` checks what the
-//! editor sends and `to_json` writes it in the file's shape.
+//! editor sends and `to_json` writes it in the file's shape. Every field must go through
+//! `parse`, `validate` and `to_json`, or saving an edit drops it.
 
 use std::collections::BTreeMap;
 
@@ -79,11 +80,14 @@ pub struct CustomEntry {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
 pub struct Mapping {
     pub slots: BTreeMap<String, Target>,
     pub custom: Vec<CustomEntry>,
     /// Parameter role → model parameter id, for models with non-standard ids.
     pub parameters: BTreeMap<String, String>,
+    /// Expressions applied at rest, e.g. toggles that hide a watermark or pick an outfit.
+    pub base_expressions: Vec<String>,
 }
 
 fn non_empty(value: Option<&Value>) -> Option<&str> {
@@ -231,6 +235,26 @@ pub fn parse(json: &Value) -> (Mapping, Vec<String>) {
             None => warnings.push(format!("mapping parameter \"{role}\" has no id; ignored")),
         }
     }
+
+    for name in root
+        .get("baseExpressions")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        match non_empty(Some(name)) {
+            Some(name) if name.chars().any(char::is_control) => {
+                warnings.push("a base expression has an invalid name; ignored".to_owned());
+            }
+            Some(name) if mapping.base_expressions.iter().any(|n| n == name) => {
+                warnings.push(format!(
+                    "base expression \"{name}\" appears twice; kept the first"
+                ));
+            }
+            Some(name) => mapping.base_expressions.push(name.to_owned()),
+            None => warnings.push("a base expression has no name; ignored".to_owned()),
+        }
+    }
     (mapping, warnings)
 }
 
@@ -284,6 +308,14 @@ pub fn validate(mapping: &Mapping) -> Result<(), String> {
     {
         return Err("a parameter role or id is empty".to_owned());
     }
+    for (i, name) in mapping.base_expressions.iter().enumerate() {
+        if name.trim() != name || name.is_empty() || name.chars().any(char::is_control) {
+            return Err("a base expression has an invalid name".to_owned());
+        }
+        if mapping.base_expressions[..i].contains(name) {
+            return Err(format!("base expression \"{name}\" is listed twice"));
+        }
+    }
     Ok(())
 }
 
@@ -310,6 +342,7 @@ pub fn to_json(mapping: &Mapping) -> Value {
         "slots": slots,
         "custom": custom,
         "parameters": mapping.parameters,
+        "baseExpressions": mapping.base_expressions,
     })
 }
 
@@ -345,7 +378,12 @@ pub fn check(mapping: &Mapping, manifest: &ModelManifest) -> Vec<String> {
         .map(|(role, id)| {
             format!("parameter \"{role}\" points at \"{id}\", which the model does not have")
         });
-    slots.chain(custom).chain(parameters).collect()
+    let base = mapping
+        .base_expressions
+        .iter()
+        .filter(|name| !manifest.has_expression(name))
+        .map(|name| format!("base expression \"{name}\" is not an expression of the model"));
+    slots.chain(custom).chain(parameters).chain(base).collect()
 }
 
 #[cfg(test)]
@@ -412,13 +450,15 @@ mod tests {
                 { "name": "a", "expression": "y" },
                 7
             ],
-            "parameters": { "mouth_open": 3 }
+            "parameters": { "mouth_open": 3 },
+            "baseExpressions": ["mask", " ", 4, "mask", "ab"]
         }));
         assert!(mapping.slots.is_empty());
         assert_eq!(mapping.custom.len(), 1);
         assert!(mapping.parameters.is_empty());
-        // schema, dance, joy, sad, nameless, duplicate, parameter
-        assert_eq!(warnings.len(), 7, "{warnings:?}");
+        assert_eq!(mapping.base_expressions, ["mask"]);
+        // schema, dance, joy, sad, nameless, duplicate, parameter, and four base expressions
+        assert_eq!(warnings.len(), 11, "{warnings:?}");
     }
 
     #[test]
@@ -444,7 +484,8 @@ mod tests {
             json!({
                 "slots": { "joy": { "expression": "exp_03" } },
                 "custom": [{ "name": "smug", "description": "", "target": { "motion": "Smug" } }],
-                "parameters": {}
+                "parameters": {},
+                "baseExpressions": []
             })
         );
     }
@@ -491,7 +532,12 @@ mod tests {
             custom,
             ..Mapping::default()
         };
+        let with_base = |names: &[&str]| Mapping {
+            base_expressions: names.iter().map(|&n| n.to_owned()).collect(),
+            ..Mapping::default()
+        };
         assert_eq!(validate(&Mapping::default()), Ok(()));
+        assert_eq!(validate(&with_base(&["水印开关", "mask"])), Ok(()));
         assert_eq!(
             validate(&with_slot("idle", Target::Motion(String::new()))),
             Ok(())
@@ -510,6 +556,11 @@ mod tests {
                 parameters: BTreeMap::from([("ParamAngleX".to_owned(), String::new())]),
                 ..Mapping::default()
             },
+            with_base(&[""]),
+            with_base(&[" mask"]),
+            with_base(&["a
+b"]),
+            with_base(&["mask", "mask"]),
         ] {
             assert!(validate(&invalid).is_err(), "{invalid:?}");
         }
@@ -529,6 +580,7 @@ mod tests {
                 target: Target::Motion("Smug".into()),
             }],
             parameters: BTreeMap::from([("ParamAngleX".to_owned(), "Param72".to_owned())]),
+            base_expressions: vec!["水印开关".into(), "mask".into()],
         };
         let written = to_json(&mapping);
         assert_eq!(
@@ -545,9 +597,11 @@ mod tests {
         let mapping: Mapping = serde_json::from_value(json!({
             "slots": { "joy": { "expression": "exp_03" } },
             "custom": [{ "name": "smug", "description": "", "target": { "motion": "" } }],
-            "parameters": {}
+            "parameters": {},
+            "baseExpressions": ["exp_03"]
         }))
         .expect("deserialises");
+        assert_eq!(mapping.base_expressions, ["exp_03"]);
         assert_eq!(mapping.slots["joy"], Target::Expression("exp_03".into()));
         assert_eq!(mapping.custom[0].target, Target::Motion(String::new()));
     }
@@ -572,10 +626,12 @@ mod tests {
                 "yawn": { "preset": "stretch" }
             },
             "custom": [{ "name": "smug", "expression": "exp_07" }],
-            "parameters": { "mouth_open": "ParamMouthOpenY", "mouth_form": "PARAM_FORM" }
+            "parameters": { "mouth_open": "ParamMouthOpenY", "mouth_form": "PARAM_FORM" },
+            "baseExpressions": ["exp_03", "watermark"]
         }));
         let warnings = check(&mapping, &manifest());
-        assert_eq!(warnings.len(), 5, "{warnings:?}");
+        assert_eq!(warnings.len(), 6, "{warnings:?}");
+        assert!(warnings.iter().any(|w| w.contains("watermark")));
         assert!(warnings.iter().any(|w| w.contains("exp_99")));
         assert!(warnings.iter().any(|w| w.contains("Wave")));
         assert!(warnings.iter().any(|w| w.contains("stretch")));

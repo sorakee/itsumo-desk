@@ -35,6 +35,9 @@ export interface Point {
  */
 export interface StageMapping {
   slots: Partial<Record<string, { motion?: string }>>;
+  /** Standard parameter id → the model's parameter that plays its role. */
+  parameters: Partial<Record<string, string>>;
+  baseExpressions: readonly string[];
 }
 
 export interface Stage {
@@ -72,7 +75,7 @@ export interface Stage {
   playMotion(group: string, index: number): void;
   /**
    * Uses the character's mapping, or none, for the model on stage and the ones loaded
-   * after it. So far it decides the idle loop's motion group.
+   * after it: the idle loop's motion group, the base expressions and the parameter roles.
    */
   setMapping(mapping: StageMapping | null): void;
   /** Plays a parameter preset, replacing any playing one. */
@@ -183,7 +186,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     projection.translate(-centerX * scaleX, -centerY * zoom);
 
     const { model, life, parameters } = onStage;
-    model.updateMotion(delta, life.presets.playing);
+    model.updateMotion(delta, life.presets.playing, parameters);
     life.update(
       delta,
       {
@@ -255,6 +258,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       cancelAnimationFrame(frame);
       frame = undefined;
     }
+  }
+
+  function applyMapping({ model, life }: OnStage) {
+    model.setIdleGroup(mapping?.slots.idle?.motion);
+    model.setBaseExpressions(mapping?.baseExpressions ?? []);
+    life.setRoles(mapping?.parameters ?? {});
   }
 
   function unloadModel() {
@@ -385,7 +394,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
     setMapping(next) {
       mapping = next;
-      current?.model.setIdleGroup(mapping?.slots.idle?.motion);
+      if (current) applyMapping(current);
     },
 
     playPreset(name) {
@@ -406,6 +415,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       await startCubism();
       controller.signal.throwIfAborted();
       const loaded = await Live2DModel.load(gl, next, controller.signal);
+      // Base expressions are part of how the model looks at rest (props, outfits, a hidden
+      // watermark), so they are in place before its first frame rather than popping in.
+      await loaded.model.setBaseExpressions(mapping?.baseExpressions ?? [], true);
       if (controller.signal.aborted) {
         loaded.model.release();
         controller.signal.throwIfAborted();
@@ -415,7 +427,6 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       // Vertex positions are only valid once the model has been updated.
       loaded.model.update(0);
       const { model, manifest } = loaded;
-      model.setIdleGroup(mapping?.slots.idle?.motion);
       const drawables = model.drawableBounds();
       const extent = unionOf(drawables);
       const headArea = manifest.hitAreas.find((h) => /head|face/i.test(`${h.id} ${h.name}`));
@@ -434,6 +445,8 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
         parameters: new ModelParameters(model.getModel(), manifest),
         life: new Life(manifest),
       };
+      // The mapping may have changed while the model loaded.
+      applyMapping(current);
       syncLoop();
       return manifest;
     },

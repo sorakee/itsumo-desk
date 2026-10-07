@@ -13,7 +13,9 @@ export interface ParameterAccess {
 
 interface Slot {
   index: number;
-  /** Half the parameter's range, the unit of `offset`. */
+  /** The middle of the parameter's range, where `setCentered` counts from. */
+  middle: number;
+  /** Half the parameter's range, the unit of `offset` and `setCentered`. */
   halfRange: number;
 }
 
@@ -26,7 +28,7 @@ export class ModelParameters {
   ) {
     manifest.parameters.forEach(({ id, min, max }, index) => {
       if (max > min) {
-        this.slots.set(id, { index, halfRange: (max - min) / 2 });
+        this.slots.set(id, { index, middle: (min + max) / 2, halfRange: (max - min) / 2 });
       }
     });
   }
@@ -45,6 +47,25 @@ export class ModelParameters {
     const slot = this.slots.get(id);
     if (slot && weight > 0) {
       this.model.setParameterValueByIndex(slot.index, value, Math.min(weight, 1));
+    }
+  }
+
+  /**
+   * Moves towards the middle of the range plus `amount` half-ranges, so -1 is the minimum and
+   * 1 the maximum whatever the range: an eyeball at 0.8 looks as far on a -1..1 parameter
+   * as on a -30..30 one that a mapping put in its place.
+   */
+  setCentered(id: string, amount: number, weight = 1): void {
+    const slot = this.slots.get(id);
+    if (slot) this.set(id, slot.middle + amount * slot.halfRange, weight);
+  }
+
+  /** Adds `amount` in the parameter's own units, as an expression's `Add` blend does. */
+  add(id: string, amount: number): void {
+    const slot = this.slots.get(id);
+    if (slot && amount !== 0) {
+      const current = this.model.getParameterValueByIndex(slot.index);
+      this.model.setParameterValueByIndex(slot.index, current + amount);
     }
   }
 
