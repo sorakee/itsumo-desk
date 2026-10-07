@@ -16,6 +16,8 @@ use super::{
 
 pub const CHARACTER_FILE: &str = "character.json";
 pub const MAPPING_FILE: &str = "mapping.json";
+/// The user's edits to the mapping, used instead of `MAPPING_FILE` when present (D45).
+pub const USER_MAPPING_FILE: &str = "mapping.user.json";
 pub const PERSONA_FILE: &str = "persona.md";
 pub const ICON_FILE: &str = "icon.png";
 pub const MANIFEST_FILE: &str = "manifest.json";
@@ -227,6 +229,11 @@ pub fn read_json(path: &Path) -> Result<Value, CharacterError> {
     })
 }
 
+/// Reads and parses a mapping file, with a warning for everything it dropped.
+pub fn read_mapping(path: &Path) -> Result<(Mapping, Vec<String>), CharacterError> {
+    Ok(mapping::parse(&read_json(path)?))
+}
+
 pub fn read_character(pack: &Path) -> Result<(CharacterJson, Vec<String>), CharacterError> {
     parse_character(&read_json(&pack.join(CHARACTER_FILE))?)
 }
@@ -291,7 +298,7 @@ pub fn validate(pack: &Path) -> Result<ValidPack, CharacterError> {
 
     let mapping_path = pack.join(MAPPING_FILE);
     let mapping = if mapping_path.is_file() {
-        let (mapping, mapping_warnings) = mapping::parse(&read_json(&mapping_path)?);
+        let (mapping, mapping_warnings) = read_mapping(&mapping_path)?;
         warnings.extend(mapping_warnings);
         Some(mapping)
     } else {

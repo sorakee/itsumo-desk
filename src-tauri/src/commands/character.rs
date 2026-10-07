@@ -2,7 +2,7 @@ use tauri::{AppHandle, WebviewWindow};
 
 use super::AppError;
 use crate::character::{
-    self, ActiveCharacter, CharacterMapping, CharacterSummary, ImportKind, ImportReview,
+    self, ActiveCharacter, CharacterMapping, CharacterSummary, ImportKind, ImportReview, Mapping,
     ModelManifest, StagedImport,
 };
 
@@ -83,6 +83,29 @@ pub async fn set_character_favorite(
 pub async fn character_mapping(app: AppHandle, id: String) -> Result<CharacterMapping, AppError> {
     validate_id(&id)?;
     Ok(character::mapping(&app, id).await?)
+}
+
+/// Saves the user's edits to a character's mapping and returns it as the editor shows it.
+#[tauri::command]
+#[specta::specta]
+pub async fn save_character_mapping(
+    app: AppHandle,
+    id: String,
+    mapping: Mapping,
+) -> Result<CharacterMapping, AppError> {
+    validate_id(&id)?;
+    Ok(character::save_mapping(&app, id, mapping).await?)
+}
+
+/// Drops the user's edits to a character's mapping, going back to the pack's own.
+#[tauri::command]
+#[specta::specta]
+pub async fn reset_character_mapping(
+    app: AppHandle,
+    id: String,
+) -> Result<CharacterMapping, AppError> {
+    validate_id(&id)?;
+    Ok(character::reset_mapping(&app, id).await?)
 }
 
 /// Lets the user pick a pack or model, then copies and validates it in staging. `None` if

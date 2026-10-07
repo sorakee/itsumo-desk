@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadFraming } from "@/ipc";
 import type { ModelSource } from "@/live2d/model";
-import { createStage, isAbortError, type Stage } from "@/live2d/stage";
+import { createStage, isAbortError, type Stage, type StageMapping } from "@/live2d/stage";
 import { errorMessage } from "@/shared/errorMessage";
 import { startDevShortcuts } from "@/windows/companion/devShortcuts";
 import { startInteraction } from "@/windows/companion/interaction";
@@ -16,11 +16,13 @@ export type StageStatus =
 interface ModelStageProps {
   /** Null shows nothing; undefined means the source is not known yet. */
   source: ModelSource | null | undefined;
+  /** The character's mapping; changing it does not reload the model. */
+  mapping: StageMapping | null;
   onStatusChange: (status: StageStatus) => void;
 }
 
 /** Hosts the Live2D canvas. The stage itself lives outside React; see `@/live2d/stage`. */
-export function ModelStage({ source, onStatusChange }: ModelStageProps) {
+export function ModelStage({ source, mapping, onStatusChange }: ModelStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stage, setStage] = useState<Stage | null>(null);
 
@@ -45,6 +47,11 @@ export function ModelStage({ source, onStatusChange }: ModelStageProps) {
       setStage(null);
     };
   }, [onStatusChange]);
+
+  // Before the load below, so a new model starts with its own mapping.
+  useEffect(() => {
+    stage?.setMapping(mapping);
+  }, [stage, mapping]);
 
   useEffect(() => {
     if (!stage || source === undefined) return;

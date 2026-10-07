@@ -1,22 +1,10 @@
-import { useState } from "react";
 import type { ModelManifest } from "@/live2d/manifest";
-import { PRESET_NAMES, type PresetName } from "@/live2d/presets";
-import type { Stage } from "@/live2d/stage";
+import { PRESET_NAMES } from "@/live2d/presets";
 import { Icon } from "@/shared/Icon";
-import { groupLabel } from "@/windows/settings/mappingSlots";
+import { groupLabel, PRESET_LABELS } from "@/windows/settings/mappingSlots";
 import { Panel } from "@/windows/settings/Panel";
+import { LOOPING_PRESET, type PreviewActions } from "@/windows/settings/usePreviewActions";
 import styles from "./PreviewControls.module.css";
-
-const PRESET_LABELS: Record<PresetName, string> = {
-  yawn: "Yawn",
-  nod: "Nod",
-  headTilt: "Head tilt",
-  lookAway: "Look away",
-  doze: "Doze",
-};
-
-// Plays until stopped, so its button toggles.
-const LOOPING_PRESET: PresetName = "doze";
 
 function fileStem(path: string): string {
   const name = path.slice(path.lastIndexOf("/") + 1);
@@ -24,30 +12,13 @@ function fileStem(path: string): string {
 }
 
 interface PreviewControlsProps {
-  stage: Stage;
   manifest: ModelManifest;
+  actions: PreviewActions;
 }
 
 /** Buttons that play the model's expressions, motions and the built-in presets. */
-export function PreviewControls({ stage, manifest }: PreviewControlsProps) {
-  const [expression, setExpression] = useState<string | null>(null);
-  const [looping, setLooping] = useState(false);
-
-  function toggleExpression(name: string) {
-    const next = expression === name ? null : name;
-    stage.setExpression(next);
-    setExpression(next);
-  }
-
-  function playPreset(name: PresetName) {
-    if (name === LOOPING_PRESET && looping) {
-      stage.stopPreset();
-      setLooping(false);
-      return;
-    }
-    stage.playPreset(name);
-    setLooping(name === LOOPING_PRESET);
-  }
+export function PreviewControls({ manifest, actions }: PreviewControlsProps) {
+  const { expression, looping, toggleExpression, playMotion, playPreset } = actions;
 
   return (
     <>
@@ -97,7 +68,7 @@ export function PreviewControls({ stage, manifest }: PreviewControlsProps) {
                       className={styles.chip}
                       title={file}
                       aria-label={`Play ${fileStem(file)}`}
-                      onClick={() => stage.playMotion(group.name, index)}
+                      onClick={() => playMotion(group.name, index)}
                     >
                       <Icon name="play" className={styles.playIcon} />
                       {group.motions.length === 1 ? "Play" : index + 1}

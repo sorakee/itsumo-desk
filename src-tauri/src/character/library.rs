@@ -13,7 +13,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::settings::CharacterSettings;
 
@@ -21,7 +21,10 @@ use super::{
     import::{self, Source},
     manifest::ModelManifest,
     mapping::{self, Mapping},
-    pack::{self, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE, MAPPING_FILE},
+    pack::{
+        self, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE, MAPPING_FILE,
+        USER_MAPPING_FILE,
+    },
     paths::is_valid_id,
     protocol, ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary, ImportReview,
     StagedImport,
@@ -85,6 +88,49 @@ fn summary(
             .is_file()
             .then(|| url_base(base, ICON_FILE)),
     }
+}
+
+/// The mapping in effect for a pack.
+struct EffectiveMapping {
+    /// `None` if the pack has no usable mapping.
+    mapping: Option<Mapping>,
+    /// For whatever the parse dropped.
+    warnings: Vec<String>,
+    /// Whether the user's edits (`mapping.user.json`) exist; they apply unless unreadable.
+    customized: bool,
+}
+
+/// Reads the user's edits to a pack's mapping if there are any (D45), else its own
+/// `mapping.json`. An unreadable `mapping.user.json` falls back to the pack's with a warning.
+fn effective_mapping(dir: &Path) -> EffectiveMapping {
+    let mut warnings = Vec::new();
+    let user = dir.join(USER_MAPPING_FILE);
+    let customized = user.is_file();
+    let mut read = |path: &Path| match pack::read_mapping(path) {
+        Ok((mapping, parse_warnings)) => {
+            warnings.extend(parse_warnings);
+            Some(mapping)
+        }
+        Err(error) => {
+            warnings.push(error.to_string());
+            None
+        }
+    };
+    let mut mapping = customized.then(|| read(&user)).flatten();
+    if mapping.is_none() {
+        let own = dir.join(MAPPING_FILE);
+        mapping = own.is_file().then(|| read(&own)).flatten();
+    }
+    EffectiveMapping {
+        mapping,
+        warnings,
+        customized,
+    }
+}
+
+fn read_manifest(dir: &Path) -> Result<ModelManifest, CharacterError> {
+    serde_json::from_value(pack::read_json(&dir.join(MANIFEST_FILE))?)
+        .map_err(|e| CharacterError::InvalidPack(e.to_string()))
 }
 
 fn remove_quietly(dir: &Path) {
@@ -174,11 +220,16 @@ impl CharacterLibrary {
 
     /// What the companion needs to load an installed character.
     pub fn active(&self, id: &str) -> Option<ActiveCharacter> {
-        let (_, character) = self.read_installed(id)?;
+        let (dir, character) = self.read_installed(id)?;
+        let effective = effective_mapping(&dir);
+        if !effective.warnings.is_empty() {
+            debug!(id, warnings = ?effective.warnings, "the active mapping has problems");
+        }
         Some(ActiveCharacter {
             id: id.to_owned(),
             model_url: url_base(&[id], &character.model),
             extras: character.extras,
+            mapping: effective.mapping,
         })
     }
 
@@ -188,29 +239,14 @@ impl CharacterLibrary {
         let (dir, character) = self
             .read_installed(id)
             .ok_or_else(|| CharacterError::UnknownCharacter(id.to_owned()))?;
-        let mut warnings = Vec::new();
-        let path = dir.join(MAPPING_FILE);
-        let mapping = if path.is_file() {
-            match pack::read_json(&path) {
-                Ok(json) => {
-                    let (mapping, parse_warnings) = mapping::parse(&json);
-                    warnings.extend(parse_warnings);
-                    Some(mapping)
-                }
-                Err(error) => {
-                    warnings.push(error.to_string());
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let EffectiveMapping {
+            mapping,
+            mut warnings,
+            customized,
+        } = effective_mapping(&dir);
         if let Some(mapping) = &mapping {
             // Cached at import; without it the targets just go unchecked.
-            match pack::read_json(&dir.join(MANIFEST_FILE)).and_then(|json| {
-                serde_json::from_value::<ModelManifest>(json)
-                    .map_err(|e| CharacterError::InvalidPack(e.to_string()))
-            }) {
+            match read_manifest(&dir) {
                 Ok(manifest) => warnings.extend(mapping::check(mapping, &manifest)),
                 Err(error) => warn!(%error, id, "could not read the cached manifest"),
             }
@@ -219,8 +255,42 @@ impl CharacterLibrary {
             model_url: url_base(&[id], &character.model),
             extras: character.extras,
             mapping,
+            customized,
             warnings,
         })
+    }
+
+    /// Saves the user's edits to a character's mapping (D45) and reads it back. The file is
+    /// written beside and then renamed, so a failed write keeps the previous edits.
+    pub fn save_mapping(
+        &self,
+        id: &str,
+        mapping: &Mapping,
+    ) -> Result<CharacterMapping, CharacterError> {
+        let dir = self
+            .installed_dir(id)
+            .ok_or_else(|| CharacterError::UnknownCharacter(id.to_owned()))?;
+        let json = serde_json::to_vec_pretty(&mapping::to_json(mapping))
+            .map_err(|e| CharacterError::InvalidPack(e.to_string()))?;
+        let io = |e| CharacterError::io(USER_MAPPING_FILE, e);
+        let partial = dir.join(format!("{USER_MAPPING_FILE}.partial"));
+        fs::write(&partial, json).map_err(io)?;
+        fs::rename(&partial, dir.join(USER_MAPPING_FILE)).map_err(io)?;
+        self.mapping(id)
+    }
+
+    /// Drops the user's edits, so the pack's own mapping applies again, and reads it back.
+    pub fn reset_mapping(&self, id: &str) -> Result<CharacterMapping, CharacterError> {
+        let dir = self
+            .installed_dir(id)
+            .ok_or_else(|| CharacterError::UnknownCharacter(id.to_owned()))?;
+        match fs::remove_file(dir.join(USER_MAPPING_FILE)) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => {
+                return Err(CharacterError::io(USER_MAPPING_FILE, error));
+            }
+            _ => {}
+        }
+        self.mapping(id)
     }
 
     /// Builds and validates a pack from `source` in a new staging folder.
@@ -273,13 +343,22 @@ impl CharacterLibrary {
         let mut staged = self.staged();
         let entry = staged.get_mut(token).ok_or(CharacterError::UnknownImport)?;
         let mut warnings = entry.warnings.clone();
-        if let Some(mapping) = &entry.mapping {
+        let installed = self.read_installed(&entry.character.id);
+        // Replacing keeps the user's edits (see `commit`), so those are what get checked.
+        let kept = installed
+            .as_ref()
+            .map(|(dir, _)| effective_mapping(dir))
+            .filter(|effective| effective.customized);
+        let checked = match &kept {
+            Some(kept) => kept.mapping.as_ref(),
+            None => entry.mapping.as_ref(),
+        };
+        if let Some(mapping) = checked {
             warnings.extend(mapping::check(mapping, manifest));
         }
         entry.reviewed = true;
-        let replaced = self
-            .read_installed(&entry.character.id)
-            .map(|(_, character)| (character, preferences.get(&entry.character.id)));
+        let replaced =
+            installed.map(|(_, character)| (character, preferences.get(&entry.character.id)));
         let alias = replaced
             .as_ref()
             .and_then(|(_, preferences)| preferences.and_then(|p| p.display_name.clone()));
@@ -310,6 +389,14 @@ impl CharacterLibrary {
             if !replace {
                 remove_quietly(&dir);
                 return Err(CharacterError::Conflict(character.id));
+            }
+            // The user's mapping edits outlive a re-import (D45), over any the pack brings.
+            let edits = target.join(USER_MAPPING_FILE);
+            if edits.is_file() {
+                if let Err(error) = fs::copy(&edits, dir.join(USER_MAPPING_FILE)) {
+                    remove_quietly(&dir);
+                    return Err(CharacterError::io(USER_MAPPING_FILE, error));
+                }
             }
             let old = self.root.join(STAGING).join(format!("{token}-old"));
             fs::rename(&target, &old).map_err(io)?;
@@ -545,6 +632,106 @@ mod tests {
             library.mapping("other"),
             Err(CharacterError::UnknownCharacter(_))
         ));
+    }
+
+    /// Installs a pack with id `mine` whose `mapping.json` maps `joy`, and returns its source
+    /// folder for re-imports.
+    fn install_mapped_pack(tmp: &TestDir, library: &CharacterLibrary) -> PathBuf {
+        let source = tmp.path("pack");
+        model_folder(&source.join("model"), "m");
+        let character =
+            json!({ "schema": 1, "id": "mine", "name": "Mine", "model": "model/m.model3.json" });
+        fs::write(source.join("character.json"), character.to_string())
+            .expect("write character.json");
+        let mapping = json!({ "schema": 1, "slots": { "joy": { "expression": "exp_01" } } });
+        fs::write(source.join("mapping.json"), mapping.to_string()).expect("write mapping.json");
+        let staged = library
+            .stage(&Source::Folder(source.clone()))
+            .expect("staged");
+        library
+            .review(&staged.token, &manifest(), &Preferences::new())
+            .expect("reviewed");
+        library.commit(&staged.token, false).expect("committed");
+        source
+    }
+
+    fn edited() -> Mapping {
+        let (mapping, _) = mapping::parse(&json!({
+            "schema": 1,
+            "slots": { "idle": { "motion": "" }, "sad": { "expression": "exp_02" } }
+        }));
+        mapping
+    }
+
+    #[test]
+    fn saved_edits_override_the_pack_mapping_until_reset() {
+        let tmp = TestDir::new("library-save-mapping");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        install_mapped_pack(&tmp, &library);
+        assert!(!library.mapping("mine").expect("installed").customized);
+
+        let saved = library.save_mapping("mine", &edited()).expect("saved");
+        assert!(saved.customized);
+        assert_eq!(saved.mapping.as_ref(), Some(&edited()));
+        // The test manifest has neither the unnamed motion group nor exp_02.
+        assert_eq!(saved.warnings.len(), 2, "{:?}", saved.warnings);
+        assert!(tmp.path("characters/mine/mapping.user.json").is_file());
+        assert!(!tmp
+            .path("characters/mine/mapping.user.json.partial")
+            .exists());
+        assert_eq!(
+            library.active("mine").expect("installed").mapping,
+            Some(edited())
+        );
+
+        let reset = library.reset_mapping("mine").expect("reset");
+        assert!(!reset.customized);
+        assert!(reset.mapping.expect("the pack's").slots.contains_key("joy"));
+        // Resetting twice is fine.
+        library.reset_mapping("mine").expect("reset again");
+        assert!(matches!(
+            library.save_mapping("other", &edited()),
+            Err(CharacterError::UnknownCharacter(_))
+        ));
+    }
+
+    #[test]
+    fn unreadable_edits_fall_back_to_the_pack_mapping() {
+        let tmp = TestDir::new("library-bad-edits");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        install_mapped_pack(&tmp, &library);
+        fs::write(tmp.path("characters/mine/mapping.user.json"), "{ nope").expect("write");
+        let read = library.mapping("mine").expect("installed");
+        assert!(read.customized);
+        assert!(read.mapping.expect("the pack's").slots.contains_key("joy"));
+        assert!(read
+            .warnings
+            .iter()
+            .any(|w| w.contains("mapping.user.json")));
+    }
+
+    #[test]
+    fn replacing_a_pack_keeps_the_users_edits() {
+        let tmp = TestDir::new("library-replace-edits");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        let source = install_mapped_pack(&tmp, &library);
+        library.save_mapping("mine", &edited()).expect("saved");
+
+        let staged = library.stage(&Source::Folder(source)).expect("staged");
+        let review = library
+            .review(&staged.token, &manifest(), &Preferences::new())
+            .expect("reviewed");
+        // The kept edits are checked, not the pack's mapping: exp_02, not exp_01.
+        assert!(
+            review.warnings.iter().any(|w| w.contains("exp_02")),
+            "{:?}",
+            review.warnings
+        );
+        assert!(!review.warnings.iter().any(|w| w.contains("exp_01")));
+        library.commit(&staged.token, true).expect("replaced");
+        let read = library.mapping("mine").expect("installed");
+        assert!(read.customized);
+        assert_eq!(read.mapping, Some(edited()));
     }
 
     #[test]

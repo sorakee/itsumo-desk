@@ -1,0 +1,37 @@
+.button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--color-outline);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.button[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.icon {
+  width: 12px;
+  height: 12px;
+}

@@ -1,0 +1,24 @@
+.select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  /* The drop-down list is drawn by the system; this keeps it dark like the window. */
+  color-scheme: dark;
+  font: inherit;
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+}
+
+.select:hover {
+  border-color: var(--color-outline);
+}
+
+.select:focus-visible {
+  border-color: var(--color-accent);
+  outline: 1px solid var(--color-accent);
+}

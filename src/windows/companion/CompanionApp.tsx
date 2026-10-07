@@ -38,6 +38,7 @@ export function CompanionApp() {
   const [status, setStatus] = useState<StageStatus>({ kind: "loading" });
   const menuAnchor = useMenuStore((state) => state.anchor);
   const active = useCharactersStore((state) => state.active);
+  const mapping = useCharactersStore((state) => state.mapping);
   const source = useMemo(() => sourceOf(active), [active]);
   const text = statusText(status);
 
@@ -46,7 +47,7 @@ export function CompanionApp() {
 
   return (
     <main className={styles.stage}>
-      <ModelStage source={source} onStatusChange={setStatus} />
+      <ModelStage source={source} mapping={mapping} onStatusChange={setStatus} />
       {text && (
         <div className={styles.placeholder} {...hitRegion}>
           <p className={styles.status}>{text}</p>

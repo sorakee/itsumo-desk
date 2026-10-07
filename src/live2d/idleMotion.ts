@@ -23,11 +23,12 @@ function between(random: () => number, [min, max]: readonly [number, number]): n
 }
 
 /**
- * The group the idle loop plays. Until the mapping editor sets an `idle` slot, that is the
- * group named "Idle" in any case.
+ * The group the idle loop plays: the one the mapping's `idle` slot names (`mapped`) if the
+ * model has it, else the group named "Idle" in any case.
  */
-export function idleGroup(groups: MotionGroup[]): MotionGroup | undefined {
-  return groups.find((g) => g.name.toLowerCase() === "idle");
+export function idleGroup(groups: MotionGroup[], mapped?: string): MotionGroup | undefined {
+  const named = mapped === undefined ? undefined : groups.find((g) => g.name === mapped);
+  return named ?? groups.find((g) => g.name.toLowerCase() === "idle");
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -122,7 +123,7 @@ export type MotionPlayer = Pick<
 /**
  * Plays an idle clip now and then, with rests in between, never the same clip twice in a
  * row. While the stage is quiet (a preset is playing) the clip fades out and none starts;
- * the next one waits for a fresh rest.
+ * the next one waits for a fresh rest. The clips belong to the model, which releases them.
  */
 export class IdleLoop {
   private current: Clip | undefined;
@@ -134,7 +135,7 @@ export class IdleLoop {
 
   constructor(
     private readonly manager: MotionPlayer,
-    private readonly clips: Clip[],
+    private clips: Clip[],
     private readonly random: () => number = Math.random,
   ) {
     this.restLeft = between(random, FIRST_REST_SECONDS);
@@ -170,12 +171,14 @@ export class IdleLoop {
     this.manager.updateMotion(model, deltaSeconds);
   }
 
+  /** Plays from `clips` from now on; a clip that is playing finishes first. */
+  setClips(clips: Clip[]): void {
+    this.clips = clips;
+  }
+
   release(): void {
     this.manager.stopAllMotions();
-    for (const clip of this.clips) {
-      clip.motion.release();
-    }
-    this.clips.length = 0;
+    this.clips = [];
     this.current = undefined;
     this.last = undefined;
   }

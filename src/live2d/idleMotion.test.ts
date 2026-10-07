@@ -15,6 +15,14 @@ describe("idleGroup", () => {
     expect(idleGroup([{ name: "Tap", motions: [] }, idle])).toBe(idle);
     expect(idleGroup([{ name: "Idle2", motions: [] }])).toBeUndefined();
   });
+
+  it("prefers the group the idle slot names, if the model has it", () => {
+    const idle = { name: "Idle", motions: [] };
+    const unnamed = { name: "", motions: [] };
+    expect(idleGroup([idle, unnamed], "")).toBe(unnamed);
+    expect(idleGroup([idle, unnamed], "idle")).toBe(idle);
+    expect(idleGroup([unnamed], "Gone")).toBeUndefined();
+  });
 });
 
 function curve(id: string, segments: number[], target = "Parameter") {
@@ -151,6 +159,22 @@ describe("IdleLoop", () => {
     expect(started).toHaveLength(1);
     run(loop, 0.4);
     expect(started).toHaveLength(2);
+  });
+
+  it("plays clips that arrive later, without repeating the last one", () => {
+    const { manager, started } = fakeManager(5);
+    const a = clip("a");
+    const b = clip("b");
+    const loop = new IdleLoop(manager, [], () => 0);
+    run(loop, 3);
+    expect(started).toHaveLength(0);
+
+    loop.setClips([a]);
+    run(loop, 0.1);
+    expect(started).toEqual([a.motion]);
+    loop.setClips([a, b]);
+    run(loop, 20);
+    expect(started).toEqual([a.motion, b.motion]);
   });
 
   it("does nothing without clips", () => {
