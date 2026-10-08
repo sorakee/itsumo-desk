@@ -13,21 +13,23 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use serde_json::Value;
 use tracing::{debug, warn};
 
 use crate::settings::CharacterSettings;
 
 use super::{
-    import::{self, Source},
+    import::{self, Origin, Source, VTUBE_SUFFIX},
     manifest::ModelManifest,
     mapping::{self, Mapping},
+    model3::{self, ModelFiles},
     pack::{
-        self, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE, MAPPING_FILE,
+        self, read_json, CharacterJson, CHARACTER_FILE, ICON_FILE, MANIFEST_FILE, MAPPING_FILE,
         USER_MAPPING_FILE,
     },
     paths::is_valid_id,
-    protocol, ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary, ImportReview,
-    StagedImport,
+    prefill, protocol, ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary,
+    ImportReview, StagedImport,
 };
 
 pub const STAGING: &str = ".staging";
@@ -35,6 +37,7 @@ pub const STAGING: &str = ".staging";
 /// An import waiting for the user's review and confirmation.
 struct Staged {
     character: CharacterJson,
+    origin: Origin,
     mapping: Option<Mapping>,
     warnings: Vec<String>,
     /// Set once the webview sent the manifest; committing needs it.
@@ -126,6 +129,33 @@ fn effective_mapping(dir: &Path) -> EffectiveMapping {
         warnings,
         customized,
     }
+}
+
+/// The `.vtube.json` VTube Studio keeps beside a model, if any.
+fn vtube_json(model_dir: &Path) -> Option<Value> {
+    let entry = fs::read_dir(model_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.to_lowercase().ends_with(VTUBE_SUFFIX))
+        })?;
+    read_json(&entry.path()).ok()
+}
+
+/// A mapping suggested from the model's names and its `.vtube.json` (prefill, D45). An
+/// unreadable `model3.json` or `.vtube.json` only means fewer suggestions.
+fn suggestions(dir: &Path, character: &CharacterJson, manifest: &ModelManifest) -> Mapping {
+    let files = read_json(&dir.join(&character.model))
+        .and_then(|json| model3::parse(&json))
+        .unwrap_or_else(|error| {
+            debug!(%error, "suggesting without the model's file list");
+            ModelFiles::default()
+        });
+    let vtube = vtube_json(&dir.join(character.model_dir()));
+    prefill::suggest(manifest, &files, &character.extras, vtube.as_ref())
 }
 
 fn read_manifest(dir: &Path) -> Result<ModelManifest, CharacterError> {
@@ -244,19 +274,23 @@ impl CharacterLibrary {
             mut warnings,
             customized,
         } = effective_mapping(&dir);
-        if let Some(mapping) = &mapping {
-            // Cached at import; without it the targets just go unchecked.
-            match read_manifest(&dir) {
-                Ok(manifest) => warnings.extend(mapping::check(mapping, &manifest)),
-                Err(error) => warn!(%error, id, "could not read the cached manifest"),
-            }
+        // Cached at import; without it the targets go unchecked and nothing is suggested.
+        let manifest = read_manifest(&dir)
+            .inspect_err(|error| warn!(%error, id, "could not read the cached manifest"))
+            .ok();
+        if let (Some(mapping), Some(manifest)) = (&mapping, &manifest) {
+            warnings.extend(mapping::check(mapping, manifest));
         }
+        let suggested = manifest
+            .map(|manifest| suggestions(&dir, &character, &manifest))
+            .unwrap_or_default();
         Ok(CharacterMapping {
             model_url: url_base(&[id], &character.model),
             extras: character.extras,
             mapping,
             customized,
             warnings,
+            suggested,
         })
     }
 
@@ -298,9 +332,9 @@ impl CharacterLibrary {
         let token = format!("{:x}", self.next_token.fetch_add(1, Ordering::Relaxed));
         let dir = self.staging(&token);
         let result = import::stage(source, &dir, &|id| self.is_installed(id))
-            .and_then(|()| pack::validate(&dir));
-        let valid = match result {
-            Ok(valid) => valid,
+            .and_then(|origin| pack::validate(&dir).map(|valid| (origin, valid)));
+        let (origin, valid) = match result {
+            Ok(staged) => staged,
             Err(error) => {
                 remove_quietly(&dir);
                 return Err(error);
@@ -319,6 +353,7 @@ impl CharacterLibrary {
             token,
             Staged {
                 character: valid.character,
+                origin,
                 mapping: valid.mapping,
                 warnings: valid.warnings,
                 reviewed: false,
@@ -328,7 +363,8 @@ impl CharacterLibrary {
     }
 
     /// Checks the mapping against the manifest the webview built and caches the manifest in
-    /// the pack.
+    /// the pack. A wrapped model gets the suggested slots and roles as its `mapping.json`, so
+    /// Reset goes back to them; suggested base expressions wait for the user (D45).
     pub fn review(
         &self,
         token: &str,
@@ -342,6 +378,20 @@ impl CharacterLibrary {
 
         let mut staged = self.staged();
         let entry = staged.get_mut(token).ok_or(CharacterError::UnknownImport)?;
+        if entry.origin == Origin::Wrapped && entry.mapping.is_none() {
+            let dir = self.staging(token);
+            let prefilled = Mapping {
+                base_expressions: Vec::new(),
+                ..suggestions(&dir, &entry.character, manifest)
+            };
+            if prefilled != Mapping::default() {
+                let json = serde_json::to_vec_pretty(&mapping::to_json(&prefilled))
+                    .map_err(|e| CharacterError::InvalidPack(e.to_string()))?;
+                fs::write(dir.join(MAPPING_FILE), json)
+                    .map_err(|e| CharacterError::io(MAPPING_FILE, e))?;
+                entry.mapping = Some(prefilled);
+            }
+        }
         let mut warnings = entry.warnings.clone();
         let installed = self.read_installed(&entry.character.id);
         // Replacing keeps the user's edits (see `commit`), so those are what get checked.
@@ -356,6 +406,7 @@ impl CharacterLibrary {
         if let Some(mapping) = checked {
             warnings.extend(mapping::check(mapping, manifest));
         }
+        let needs_mapping = mapping::needs_attention(checked, manifest);
         entry.reviewed = true;
         let replaced =
             installed.map(|(_, character)| (character, preferences.get(&entry.character.id)));
@@ -367,6 +418,7 @@ impl CharacterLibrary {
             replaces: replaced
                 .map(|(character, preferences)| display_name(&character, preferences)),
             name: alias.unwrap_or_else(|| entry.character.name.clone()),
+            needs_mapping,
         })
     }
 
@@ -732,6 +784,86 @@ mod tests {
         let read = library.mapping("mine").expect("installed");
         assert!(read.customized);
         assert_eq!(read.mapping, Some(edited()));
+    }
+
+    /// A VTube Studio export: an angry toggle, a watermark toggle, head roles on `Param72`.
+    fn vts_folder(dir: &Path) -> PathBuf {
+        let model3 = model_folder(dir, "m");
+        for name in ["生气脸", "水印开关"] {
+            fs::write(dir.join(format!("{name}.exp3.json")), "{}").expect("write expression");
+        }
+        let vtube = json!({ "ParameterSettings": [
+            { "Name": "Face Left/Right Rotation", "Input": "FaceAngleX", "OutputLive2D": "Param72" }
+        ] });
+        fs::write(dir.join("m.vtube.json"), vtube.to_string()).expect("write vtube.json");
+        model3
+    }
+
+    fn vts_manifest() -> ModelManifest {
+        ModelManifest {
+            parameters: vec![crate::character::manifest::ParameterInfo {
+                id: "Param72".into(),
+                min: -30.0,
+                max: 30.0,
+                default: 0.0,
+                name: None,
+            }],
+            expressions: vec!["生气脸".into(), "水印开关".into()],
+            ..manifest()
+        }
+    }
+
+    #[test]
+    fn a_wrapped_model_is_installed_with_the_suggested_mapping() {
+        let tmp = TestDir::new("library-prefill");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        let model3 = vts_folder(&tmp.path("source"));
+        let staged = library.stage(&Source::File(model3)).expect("staged");
+        let review = library
+            .review(&staged.token, &vts_manifest(), &Preferences::new())
+            .expect("reviewed");
+        assert!(review.warnings.is_empty(), "{:?}", review.warnings);
+        // Only "angry" is mapped, so the editor should open.
+        assert!(review.needs_mapping);
+        library.commit(&staged.token, false).expect("committed");
+
+        let read = library.mapping("m").expect("installed");
+        assert!(!read.customized);
+        let mapping = read.mapping.expect("prefilled");
+        assert_eq!(
+            mapping.slots,
+            BTreeMap::from([(
+                "angry".to_owned(),
+                mapping::Target::Expression("生气脸".into())
+            )])
+        );
+        assert_eq!(mapping.parameters["ParamAngleX"], "Param72");
+        // The watermark toggle is only suggested, never worn without the user's say.
+        assert!(mapping.base_expressions.is_empty());
+        assert_eq!(read.suggested.base_expressions, ["水印开关"]);
+        assert_eq!(read.suggested.slots, mapping.slots);
+    }
+
+    #[test]
+    fn a_pack_without_a_mapping_keeps_its_files() {
+        let tmp = TestDir::new("library-prefill-pack");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        let source = tmp.path("pack");
+        vts_folder(&source.join("model"));
+        let character =
+            json!({ "schema": 1, "id": "mine", "name": "Mine", "model": "model/m.model3.json" });
+        fs::write(source.join("character.json"), character.to_string())
+            .expect("write character.json");
+        let staged = library.stage(&Source::Folder(source)).expect("staged");
+        library
+            .review(&staged.token, &vts_manifest(), &Preferences::new())
+            .expect("reviewed");
+        library.commit(&staged.token, false).expect("committed");
+
+        assert!(!tmp.path("characters/mine/mapping.json").exists());
+        let read = library.mapping("mine").expect("installed");
+        assert!(read.mapping.is_none());
+        assert!(read.suggested.slots.contains_key("angry"));
     }
 
     #[test]

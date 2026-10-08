@@ -141,6 +141,11 @@ export type CharacterMapping = {
 	/**  Whether the mapping is the user's edits (`mapping.user.json`) rather than the pack's. */
 	customized: boolean,
 	warnings: string[],
+	/**
+	 *  Slots, roles and base expressions guessed from the model's names and `.vtube.json`
+	 *  (D45 prefill). The editor offers them; nothing here applies by itself.
+	 */
+	suggested: Mapping,
 };
 
 /**  An installed character, as listed in the settings window. */
@@ -225,6 +230,11 @@ export type ImportReview = {
 	 *  replacing keeps it, else the pack's name.
 	 */
 	name: string,
+	/**
+	 *  Whether the mapping leaves emotions or the idle loop unmapped, so the mapping editor
+	 *  should open once the character is installed.
+	 */
+	needsMapping: boolean,
 };
 
 export type Mapping = {

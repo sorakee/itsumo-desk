@@ -9,11 +9,13 @@ import styles from "./MappingView.module.css";
 
 interface MappingViewProps {
   id: string;
+  /** Whether the character was just imported, which says how its mapping came about. */
+  imported: boolean;
   onBack: () => void;
 }
 
 /** One character's expressions, motions and mapping editor, with a live preview. */
-export function MappingView({ id, onBack }: MappingViewProps) {
+export function MappingView({ id, imported, onBack }: MappingViewProps) {
   const name = useCharactersStore((state) => state.characters?.find((c) => c.id === id)?.name);
   const editing = useCharacterMapping(id);
   const { model, loadError: error } = editing;
@@ -67,6 +69,12 @@ export function MappingView({ id, onBack }: MappingViewProps) {
             <p className={styles.error}>{error}</p>
           ) : (
             <>
+              {imported && (
+                <p className={styles.imported}>
+                  Installed. Some emotions or the idle motion are not mapped yet. Check what was
+                  filled in from the model's names with the play buttons, and map the rest.
+                </p>
+              )}
               {preview.kind === "ready" && (
                 <MappingPanels
                   stage={preview.stage}

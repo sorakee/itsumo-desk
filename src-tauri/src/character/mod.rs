@@ -8,6 +8,7 @@ mod model3;
 mod names;
 mod pack;
 mod paths;
+mod prefill;
 mod protocol;
 
 use std::io;
@@ -112,6 +113,9 @@ pub struct CharacterMapping {
     /// Whether the mapping is the user's edits (`mapping.user.json`) rather than the pack's.
     pub customized: bool,
     pub warnings: Vec<String>,
+    /// Slots, roles and base expressions guessed from the model's names and `.vtube.json`
+    /// (D45 prefill). The editor offers them; nothing here applies by itself.
+    pub suggested: Mapping,
 }
 
 /// What to pick in the native dialog.
@@ -145,6 +149,9 @@ pub struct ImportReview {
     /// The name to offer for the character: the replaced one's alias if it has one, so
     /// replacing keeps it, else the pack's name.
     pub name: String,
+    /// Whether the mapping leaves emotions or the idle loop unmapped, so the mapping editor
+    /// should open once the character is installed.
+    pub needs_mapping: bool,
 }
 
 /// Runs `f` against the library on a blocking thread: every library call touches the disk.

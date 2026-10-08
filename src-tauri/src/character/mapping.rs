@@ -42,6 +42,10 @@ const PRESETS: [&str; 5] = ["yawn", "nod", "headTilt", "lookAway", "doze"];
 /// The slot the idle loop plays from; it takes motions only (D45).
 const IDLE_SLOT: &str = "idle";
 
+/// The emotions a character should have mapped; `neutral` can stay empty, as no expression.
+/// An import that leaves one unmapped opens the mapping editor (`06` import flow, step 5).
+const MOOD_SLOTS: [&str; 5] = ["joy", "sad", "angry", "surprised", "shy"];
+
 /// Custom entry names become output tags (`[smug]`), so they stay short and plain. Both
 /// limits are mirrored in `src/windows/settings/mappingRules.ts`.
 pub const MAX_CUSTOM_NAME_CHARS: usize = 32;
@@ -386,6 +390,24 @@ pub fn check(mapping: &Mapping, manifest: &ModelManifest) -> Vec<String> {
     slots.chain(custom).chain(parameters).chain(base).collect()
 }
 
+/// Whether a newly imported character should go to the mapping editor: an emotion slot is
+/// unmapped (or points at something the model lacks), or the model has motions but nothing
+/// for the idle loop to play.
+pub fn needs_attention(mapping: Option<&Mapping>, manifest: &ModelManifest) -> bool {
+    let mapped = |slot: &str| {
+        mapping
+            .and_then(|m| m.slots.get(slot))
+            .is_some_and(|target| missing(target, manifest).is_none())
+    };
+    let idle_plays = mapped(IDLE_SLOT)
+        || manifest
+            .motion_groups
+            .iter()
+            .any(|g| g.name.eq_ignore_ascii_case(IDLE_SLOT));
+    let idle_missing = !idle_plays && !manifest.motion_groups.is_empty();
+    idle_missing || MOOD_SLOTS.iter().any(|slot| !mapped(slot))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -637,5 +659,47 @@ b"]),
         assert!(warnings.iter().any(|w| w.contains("stretch")));
         assert!(warnings.iter().any(|w| w.contains("smug")));
         assert!(warnings.iter().any(|w| w.contains("PARAM_FORM")));
+    }
+
+    #[test]
+    fn imports_need_attention_until_the_moods_and_idle_are_mapped() {
+        let expression = |name: &str| Target::Expression(name.into());
+        let moods = |target: Target| Mapping {
+            slots: MOOD_SLOTS
+                .iter()
+                .map(|slot| ((*slot).to_owned(), target.clone()))
+                .collect(),
+            ..Mapping::default()
+        };
+        let manifest = manifest();
+        assert!(needs_attention(None, &manifest));
+        // The manifest has an "Idle" group, which plays when idle is unmapped.
+        assert!(!needs_attention(
+            Some(&moods(expression("exp_03"))),
+            &manifest
+        ));
+        assert!(needs_attention(
+            Some(&moods(expression("exp_99"))),
+            &manifest
+        ));
+
+        let mut other_idle = manifest.clone();
+        other_idle.motion_groups[0].name = "Loop".into();
+        assert!(needs_attention(
+            Some(&moods(expression("exp_03"))),
+            &other_idle
+        ));
+        let mut mapped = moods(expression("exp_03"));
+        mapped
+            .slots
+            .insert("idle".into(), Target::Motion("Loop".into()));
+        assert!(!needs_attention(Some(&mapped), &other_idle));
+
+        let mut no_motions = manifest.clone();
+        no_motions.motion_groups.clear();
+        assert!(!needs_attention(
+            Some(&moods(expression("exp_03"))),
+            &no_motions
+        ));
     }
 }

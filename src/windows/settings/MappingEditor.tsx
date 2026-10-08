@@ -5,6 +5,7 @@ import { BaseExpressionList } from "@/windows/settings/BaseExpressionList";
 import { Button } from "@/windows/settings/Button";
 import { CustomEntryRow } from "@/windows/settings/CustomEntryRow";
 import { BEHAVIOUR_SLOTS, EMOTION_SLOTS, type SlotInfo } from "@/windows/settings/mappingSlots";
+import { fillFromSuggestions } from "@/windows/settings/mappingSuggestions";
 import { NewCustomEntry } from "@/windows/settings/NewCustomEntry";
 import { Panel } from "@/windows/settings/Panel";
 import { ParameterRoleList } from "@/windows/settings/ParameterRoleList";
@@ -26,6 +27,8 @@ interface MappingEditorProps {
   /** Whether the mapping is the user's edits rather than the pack's own. */
   customized: boolean;
   warnings: string[];
+  /** Slots, roles and base expressions guessed from the model's names. */
+  suggested: Mapping;
   /** Why the last change was not saved, if it was not. */
   saveError: string | null;
   manifest: ModelManifest;
@@ -39,6 +42,7 @@ export function MappingEditor({
   mapping,
   customized,
   warnings,
+  suggested,
   saveError,
   manifest,
   actions,
@@ -47,6 +51,7 @@ export function MappingEditor({
 }: MappingEditorProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
   const names = mapping.custom.map((entry) => entry.name);
+  const filled = fillFromSuggestions(mapping, suggested);
 
   function setSlot(slot: string, target: Target | undefined) {
     const others = Object.fromEntries(Object.entries(mapping.slots).filter(([s]) => s !== slot));
@@ -88,6 +93,14 @@ export function MappingEditor({
           {saveError}
         </p>
       )}
+      {filled && (
+        <div className={styles.suggest}>
+          <span className={styles.suggestText}>
+            The model's names suggest targets for some empty slots or parameters.
+          </span>
+          <Button onClick={() => onChange(filled)}>Fill in suggestions</Button>
+        </div>
+      )}
       <h3 className={styles.heading}>Behaviour</h3>
       {slotList(BEHAVIOUR_SLOTS)}
       <h3 className={styles.heading}>Emotions</h3>
@@ -128,6 +141,7 @@ export function MappingEditor({
       </p>
       <BaseExpressionList
         names={mapping.baseExpressions}
+        suggested={suggested.baseExpressions}
         manifest={manifest}
         onChange={(baseExpressions) => onChange({ ...mapping, baseExpressions })}
       />
@@ -155,7 +169,7 @@ export function MappingEditor({
           {confirmingReset ? (
             <>
               <span className={styles.resetText}>
-                Discard your changes and go back to the pack's own mapping?
+                Discard your changes and go back to the mapping it was installed with?
               </span>
               <Button
                 tone="danger"

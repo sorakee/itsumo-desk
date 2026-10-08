@@ -25,6 +25,8 @@ export interface MappingEditing {
   mapping: Mapping;
   customized: boolean;
   warnings: string[];
+  /** What the core guesses from the model's names; offered, never applied by itself. */
+  suggested: Mapping;
   loadError: string | null;
   saveError: string | null;
   save: (mapping: Mapping) => void;
@@ -95,6 +97,7 @@ export function useCharacterMapping(id: string): MappingEditing {
     mapping,
     customized: saved?.customized ?? false,
     warnings: saved?.warnings ?? [],
+    suggested: saved?.suggested ?? EMPTY_MAPPING,
     loadError,
     saveError,
     save,
