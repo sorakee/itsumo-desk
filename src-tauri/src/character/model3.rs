@@ -14,20 +14,26 @@ pub struct ModelFiles {
     pub optional: Vec<String>,
     pub expression_names: Vec<String>,
     pub motion_groups: Vec<String>,
+    /// Each expression's name and file, for matching files back to names.
+    pub expression_files: Vec<(String, String)>,
+    /// Each motion's group and file.
+    pub motion_files: Vec<(String, String)>,
     /// References that were dropped because they are not safe relative paths.
     pub rejected: Vec<String>,
 }
 
 impl ModelFiles {
-    fn optional(&mut self, value: Option<&Value>) {
-        let Some(raw) = value.and_then(Value::as_str) else {
-            return;
+    /// Records an optional file and returns its safe path, if it has one.
+    fn optional(&mut self, value: Option<&Value>) -> Option<String> {
+        let raw = value.and_then(Value::as_str)?;
+        let Some(path) = safe_relative_path(raw) else {
+            self.rejected.push(raw.to_owned());
+            return None;
         };
-        match safe_relative_path(raw) {
-            Some(path) if !self.optional.contains(&path) => self.optional.push(path),
-            Some(_) => {}
-            None => self.rejected.push(raw.to_owned()),
+        if !self.optional.contains(&path) {
+            self.optional.push(path.clone());
         }
+        Some(path)
     }
 }
 
@@ -69,10 +75,13 @@ pub fn parse(json: &Value) -> Result<ModelFiles, CharacterError> {
         .into_iter()
         .flatten()
     {
-        if let Some(name) = expression.get("Name").and_then(Value::as_str) {
+        let name = expression.get("Name").and_then(Value::as_str);
+        if let Some(name) = name {
             files.expression_names.push(name.to_owned());
         }
-        files.optional(expression.get("File"));
+        if let (Some(name), Some(file)) = (name, files.optional(expression.get("File"))) {
+            files.expression_files.push((name.to_owned(), file));
+        }
     }
     for (group, motions) in refs
         .get("Motions")
@@ -82,7 +91,9 @@ pub fn parse(json: &Value) -> Result<ModelFiles, CharacterError> {
     {
         files.motion_groups.push(group.clone());
         for motion in motions.as_array().into_iter().flatten() {
-            files.optional(motion.get("File"));
+            if let Some(file) = files.optional(motion.get("File")) {
+                files.motion_files.push((group.clone(), file));
+            }
             files.optional(motion.get("Sound"));
         }
     }
@@ -127,6 +138,11 @@ mod tests {
         );
         assert_eq!(files.expression_names, ["smile"]);
         assert_eq!(files.motion_groups, ["Idle", "Tap"]);
+        assert_eq!(
+            files.expression_files,
+            [("smile".to_owned(), "exp/smile.exp3.json".to_owned())]
+        );
+        assert_eq!(files.motion_files.len(), 2);
         assert!(files.rejected.is_empty());
     }
 

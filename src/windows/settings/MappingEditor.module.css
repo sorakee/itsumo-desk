@@ -41,6 +41,23 @@
   white-space: nowrap;
 }
 
+.suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.suggestText {
+  flex: 1;
+  min-width: 12rem;
+  font-size: 0.8125rem;
+}
+
 .saveError {
   margin: 0 0 12px;
   padding: 8px 12px;

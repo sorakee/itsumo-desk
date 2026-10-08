@@ -36,7 +36,7 @@ const MACOS_METADATA: &str = "__MACOSX";
 
 const EXPRESSION_SUFFIX: &str = ".exp3.json";
 const MOTION_SUFFIX: &str = ".motion3.json";
-const VTUBE_SUFFIX: &str = ".vtube.json";
+pub const VTUBE_SUFFIX: &str = ".vtube.json";
 
 pub enum Source {
     Folder(PathBuf),
@@ -76,13 +76,22 @@ fn file_name(path: &Path) -> Option<&str> {
     path.file_name().and_then(|name| name.to_str())
 }
 
+/// What a staged pack was built from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Origin {
+    /// A pack with its own `character.json`, copied whole.
+    Pack,
+    /// A bare model wrapped in a new pack, so everything beside the model is the app's.
+    Wrapped,
+}
+
 /// Fills `dest`, which must not exist yet, with a pack built from `source`. `taken` tells
 /// which ids are installed, so a wrapped model gets a fresh one.
 pub fn stage(
     source: &Source,
     dest: &Path,
     taken: &dyn Fn(&str) -> bool,
-) -> Result<(), CharacterError> {
+) -> Result<Origin, CharacterError> {
     match source {
         Source::Folder(dir) => stage_folder(dir, dest, taken),
         Source::File(file) => {
@@ -98,7 +107,7 @@ pub fn stage(
                 }
                 result
             } else if ends_with_ignore_case(name, MODEL_SUFFIX) {
-                wrap(file, dest, taken)
+                wrap(file, dest, taken).map(|()| Origin::Wrapped)
             } else {
                 Err(CharacterError::Unsupported)
             }
@@ -110,10 +119,12 @@ fn stage_folder(
     dir: &Path,
     dest: &Path,
     taken: &dyn Fn(&str) -> bool,
-) -> Result<(), CharacterError> {
+) -> Result<Origin, CharacterError> {
     match locate(dir)? {
-        Located::Pack(pack) => copy_tree(&pack, dest, &mut Budget::default()),
-        Located::Model(model) => wrap(&model, dest, taken),
+        Located::Pack(pack) => {
+            copy_tree(&pack, dest, &mut Budget::default()).map(|()| Origin::Pack)
+        }
+        Located::Model(model) => wrap(&model, dest, taken).map(|()| Origin::Wrapped),
     }
 }
 

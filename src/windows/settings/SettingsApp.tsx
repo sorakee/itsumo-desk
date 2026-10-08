@@ -7,8 +7,9 @@ import styles from "./SettingsApp.module.css";
 
 export function SettingsApp() {
   const [info, setInfo] = useState<AppInfo | null>(null);
-  // The character whose mapping is open, in place of the main page.
-  const [mappingFor, setMappingFor] = useState<string | null>(null);
+  // The character whose mapping is open, in place of the main page, and whether it was
+  // just imported.
+  const [mappingFor, setMappingFor] = useState<{ id: string; imported: boolean } | null>(null);
 
   useEffect(() => {
     commands.appInfo().then(setInfo);
@@ -17,7 +18,13 @@ export function SettingsApp() {
   useEffect(() => syncCharactersStore(), []);
 
   if (mappingFor !== null) {
-    return <MappingView id={mappingFor} onBack={() => setMappingFor(null)} />;
+    return (
+      <MappingView
+        id={mappingFor.id}
+        imported={mappingFor.imported}
+        onBack={() => setMappingFor(null)}
+      />
+    );
   }
 
   return (
@@ -30,7 +37,7 @@ export function SettingsApp() {
           </p>
         )}
       </header>
-      <CharactersSection onEditMapping={setMappingFor} />
+      <CharactersSection onEditMapping={(id, imported) => setMappingFor({ id, imported })} />
     </main>
   );
 }

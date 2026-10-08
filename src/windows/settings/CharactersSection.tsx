@@ -9,14 +9,17 @@ import { useCharacterImport } from "@/windows/settings/useCharacterImport";
 import styles from "./CharactersSection.module.css";
 
 interface CharactersSectionProps {
-  onEditMapping: (id: string) => void;
+  /** Opens a character's mapping; `imported` when it was just installed. */
+  onEditMapping: (id: string, imported: boolean) => void;
 }
 
 /** Installed characters: import, switch, rename, favourite, map, remove. */
 export function CharactersSection({ onEditMapping }: CharactersSectionProps) {
   const characters = useCharactersStore((state) => state.characters);
   const activeId = useCharactersStore((state) => state.active?.id);
-  const { state, start, rename, install, cancel } = useCharacterImport();
+  const { state, start, rename, install, cancel } = useCharacterImport((id) =>
+    onEditMapping(id, true),
+  );
   const [actionError, setActionError] = useState<string | null>(null);
   const importing = state.step !== "idle" && state.step !== "failed";
 
@@ -67,7 +70,7 @@ export function CharactersSection({ onEditMapping }: CharactersSectionProps) {
                 active={character.id === activeId}
                 disabled={importing}
                 onActivate={() => run(() => setActiveCharacter(character.id))}
-                onEditMapping={() => onEditMapping(character.id)}
+                onEditMapping={() => onEditMapping(character.id, false)}
                 onRemove={() => run(() => removeCharacter(character.id))}
                 onRename={(name) => run(() => renameCharacter(character.id, name))}
                 onToggleFavorite={() =>

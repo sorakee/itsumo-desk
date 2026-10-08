@@ -28,6 +28,7 @@ export function MappingPanels({ stage, manifest, editing }: MappingPanelsProps) 
         mapping={mapping}
         customized={editing.customized}
         warnings={editing.warnings}
+        suggested={editing.suggested}
         saveError={editing.saveError}
         manifest={manifest}
         actions={actions}

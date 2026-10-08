@@ -157,6 +157,14 @@
   padding-right: 8px;
 }
 
+.imported {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  font-size: 0.8125rem;
+}
+
 .error {
   margin: 0;
   color: var(--color-danger);

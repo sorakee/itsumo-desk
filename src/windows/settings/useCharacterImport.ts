@@ -1,6 +1,7 @@
 // The import flow (D42): the core stages and validates the pick, this window builds the
 // model's manifest (only the Cubism Core can read a moc), the core checks the mapping
-// against it, and the user confirms before anything is installed.
+// against it, and the user confirms before anything is installed. A character installed
+// with emotions or idle unmapped goes on to the mapping editor (`06` import flow, step 5).
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -46,7 +47,7 @@ function warnCancelFailed(error: unknown) {
   console.warn("failed to discard a staged import", error);
 }
 
-export function useCharacterImport(): CharacterImport {
+export function useCharacterImport(onNeedsMapping: (id: string) => void): CharacterImport {
   const [state, setState] = useState<ImportState>({ step: "idle" });
   // The staged import the core is holding for this window, discarded if the user cancels
   // or the window closes mid-import (the core also clears staging on startup).
@@ -103,10 +104,13 @@ export function useCharacterImport(): CharacterImport {
     // The core consumes the staged import whether or not the commit succeeds.
     token.current = null;
     commitImport(staged.token, review.replaces !== null, name).then(
-      () => setState({ step: "idle" }),
+      () => {
+        setState({ step: "idle" });
+        if (review.needsMapping) onNeedsMapping(staged.character.id);
+      },
       (error: unknown) => setState({ step: "failed", message: errorMessage(error) }),
     );
-  }, [state]);
+  }, [state, onNeedsMapping]);
 
   const rename = useCallback((name: string) => {
     setState((current) => (current.step === "review" ? { ...current, name } : current));

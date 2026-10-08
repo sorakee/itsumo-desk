@@ -67,7 +67,10 @@ export function saveCharacterMapping(id: string, mapping: Mapping): Promise<Char
   return unwrap(commands.saveCharacterMapping(id, mapping));
 }
 
-/** Drops the user's edits to a character's mapping, going back to the pack's own. */
+/**
+ * Drops the user's edits to a character's mapping, going back to the one it was installed
+ * with: the pack's own, or for a wrapped model the one suggested at import.
+ */
 export function resetCharacterMapping(id: string): Promise<CharacterMapping> {
   return unwrap(commands.resetCharacterMapping(id));
 }
