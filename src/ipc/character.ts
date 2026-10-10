@@ -84,12 +84,17 @@ export function stageImport(kind: ImportKind): Promise<StagedImport | null> {
 }
 
 /**
- * Sends the manifest of a staged import's model for the core to check the mapping against.
- * The frontend's manifest type must stay assignable to the generated wire type (D42); this
- * call is where the compiler checks it.
+ * Sends the manifest of a staged import's model for the core to check the mapping against,
+ * and its Core update time for the heavy-model check (D49). The frontend's manifest type
+ * must stay assignable to the generated wire type (D42); this call is where the compiler
+ * checks it.
  */
-export function reviewImport(token: string, manifest: ModelManifest): Promise<ImportReview> {
-  return unwrap(commands.reviewCharacterImport(token, manifest));
+export function reviewImport(
+  token: string,
+  manifest: ModelManifest,
+  updateMs: number,
+): Promise<ImportReview> {
+  return unwrap(commands.reviewCharacterImport(token, manifest, updateMs));
 }
 
 /**

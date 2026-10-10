@@ -120,16 +120,21 @@ pub async fn stage_character_import(
     Ok(character::stage(&app, window, kind).await?)
 }
 
-/// Checks a staged import against the manifest the webview built from its model.
+/// Checks a staged import against the manifest the webview built from its model and the
+/// Cubism Core update time it measured (milliseconds per frame).
 #[tauri::command]
 #[specta::specta]
 pub async fn review_character_import(
     app: AppHandle,
     token: String,
     manifest: ModelManifest,
+    update_ms: f64,
 ) -> Result<ImportReview, AppError> {
     validate_token(&token)?;
-    Ok(character::review(&app, token, manifest).await?)
+    if !update_ms.is_finite() || update_ms < 0.0 {
+        return Err(AppError::InvalidArgument("update time".into()));
+    }
+    Ok(character::review(&app, token, manifest, update_ms).await?)
 }
 
 /// Installs a reviewed import under `name` and makes it active. `replace` allows replacing

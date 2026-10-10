@@ -72,8 +72,11 @@ export const commands = {
 	extras: ModelExtras,
 	warnings: string[],
 } | null, AppError>(__TAURI_INVOKE("stage_character_import", { kind })),
-	/**  Checks a staged import against the manifest the webview built from its model. */
-	reviewCharacterImport: (token: string, manifest: ModelManifest) => typedError<ImportReview, AppError>(__TAURI_INVOKE("review_character_import", { token, manifest })),
+	/**
+	 *  Checks a staged import against the manifest the webview built from its model and the
+	 *  Cubism Core update time it measured (milliseconds per frame).
+	 */
+	reviewCharacterImport: (token: string, manifest: ModelManifest, updateMs: number | null) => typedError<ImportReview, AppError>(__TAURI_INVOKE("review_character_import", { token, manifest, updateMs })),
 	/**
 	 *  Installs a reviewed import under `name` and makes it active. `replace` allows replacing
 	 *  an installed character with the same id.
@@ -235,6 +238,11 @@ export type ImportReview = {
 	 *  should open once the character is installed.
 	 */
 	needsMapping: boolean,
+	/**
+	 *  Why the model is heavier than the idle budget allows for (D49), one sentence each;
+	 *  empty for a typical model.
+	 */
+	heavy: string[],
 };
 
 export type Mapping = {

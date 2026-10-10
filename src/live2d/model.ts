@@ -6,6 +6,7 @@ import type { CubismModel } from "@cubism/framework/model/cubismmodel";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
 import { CubismMotionManager } from "@cubism/framework/motion/cubismmotionmanager";
 import { BaseExpressions } from "@/live2d/baseExpressions";
+import { timeUpdate } from "@/live2d/coreCost";
 import { CUBISM_SHADER_PATH, startCubism } from "@/live2d/cubism";
 import { Expressions } from "@/live2d/expressions";
 import { type Bounds, boundsOf } from "@/live2d/framing";
@@ -122,14 +123,20 @@ function manifestOf(
   });
 }
 
+export interface InspectedModel {
+  manifest: ModelManifest;
+  /** The median Cubism Core update, in milliseconds per frame on this machine (D49). */
+  updateMs: number;
+}
+
 /**
- * Builds a model's manifest without rendering it (no textures, no WebGL), e.g. to validate
- * an import.
+ * Builds a model's manifest and times its Core update without rendering it (no textures,
+ * no WebGL), e.g. to validate an import.
  */
 export async function inspectModel(
   source: ModelSource,
   signal: AbortSignal,
-): Promise<ModelManifest> {
+): Promise<InspectedModel> {
   await startCubism();
   const settings = await fetchSettings(source, signal);
   const at = (path: string | undefined) => (path === undefined ? undefined : resolve(source, path));
@@ -148,7 +155,8 @@ export async function inspectModel(
     if (!model) {
       throw mocError(moc);
     }
-    return manifestOf(settings, model.getModel(), displayInfo);
+    const core = model.getModel();
+    return { manifest: manifestOf(settings, core, displayInfo), updateMs: timeUpdate(core) };
   } finally {
     if (model) cubismMoc.deleteModel(model);
     CubismMoc.delete(cubismMoc);

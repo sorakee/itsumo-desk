@@ -100,6 +100,23 @@ export function ImportDialog({ state, onRename, onInstall, onCancel }: ImportDia
               {plural(state.manifest.parameters.length, "parameter")}
             </p>
 
+            {state.review.heavy.length > 0 && (
+              <section className={styles.heavy} aria-labelledby="import-heavy">
+                <h3 id="import-heavy" className={styles.heavyTitle}>
+                  This model is heavy
+                </h3>
+                <ul>
+                  {state.review.heavy.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+                <p className={styles.muted}>
+                  It still works, but it costs more than Itsumo Desk aims for while it sits idle. A
+                  lighter character brings the cost back down.
+                </p>
+              </section>
+            )}
+
             <h3 className={styles.label}>Licence</h3>
             <p className={styles.license}>
               {state.staged.character.license || "The pack does not state a licence."}

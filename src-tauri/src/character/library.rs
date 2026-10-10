@@ -28,8 +28,10 @@ use super::{
         USER_MAPPING_FILE,
     },
     paths::is_valid_id,
-    prefill, protocol, ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary,
-    ImportReview, StagedImport,
+    prefill, protocol,
+    weight::Weight,
+    ActiveCharacter, CharacterError, CharacterMapping, CharacterSummary, ImportReview,
+    StagedImport,
 };
 
 pub const STAGING: &str = ".staging";
@@ -365,10 +367,12 @@ impl CharacterLibrary {
     /// Checks the mapping against the manifest the webview built and caches the manifest in
     /// the pack. A wrapped model gets the suggested slots and roles as its `mapping.json`, so
     /// Reset goes back to them; suggested base expressions wait for the user (D45).
+    /// `update_ms` is the Core update the webview timed, for the heavy-model check (D49).
     pub fn review(
         &self,
         token: &str,
         manifest: &ModelManifest,
+        update_ms: f64,
         preferences: &Preferences,
     ) -> Result<ImportReview, CharacterError> {
         let json = serde_json::to_vec_pretty(manifest)
@@ -407,6 +411,10 @@ impl CharacterLibrary {
             warnings.extend(mapping::check(mapping, manifest));
         }
         let needs_mapping = mapping::needs_attention(checked, manifest);
+        let dir = self.staging(token);
+        let files = model3::parse(&read_json(&dir.join(&entry.character.model))?)?;
+        let heavy =
+            Weight::read(&dir.join(entry.character.model_dir()), &files, update_ms).reasons();
         entry.reviewed = true;
         let replaced =
             installed.map(|(_, character)| (character, preferences.get(&entry.character.id)));
@@ -419,6 +427,7 @@ impl CharacterLibrary {
                 .map(|(character, preferences)| display_name(&character, preferences)),
             name: alias.unwrap_or_else(|| entry.character.name.clone()),
             needs_mapping,
+            heavy,
         })
     }
 
@@ -533,9 +542,10 @@ mod tests {
             .stage(&Source::File(model3.clone()))
             .expect("staged again");
         let review = library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         assert_eq!(review.replaces, None);
+        assert!(review.heavy.is_empty(), "{:?}", review.heavy);
         assert_eq!(
             library.commit(&staged.token, false).expect("committed").id,
             "hiyori"
@@ -558,6 +568,18 @@ mod tests {
     }
 
     #[test]
+    fn the_review_reports_a_heavy_model() {
+        let tmp = TestDir::new("library-heavy");
+        let library = CharacterLibrary::open(tmp.path("characters"));
+        let model3 = model_folder(&tmp.path("source"), "Heavy");
+        let staged = library.stage(&Source::File(model3)).expect("staged");
+        let review = library
+            .review(&staged.token, &manifest(), 8.9, &Preferences::new())
+            .expect("reviewed");
+        assert_eq!(review.heavy.len(), 1, "{:?}", review.heavy);
+    }
+
+    #[test]
     fn a_pack_with_an_installed_id_replaces_only_when_asked() {
         let tmp = TestDir::new("library-replace");
         let library = CharacterLibrary::open(tmp.path("characters"));
@@ -575,7 +597,7 @@ mod tests {
             .stage(&Source::Folder(source.clone()))
             .expect("staged");
         library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 
@@ -584,7 +606,7 @@ mod tests {
             .stage(&Source::Folder(source.clone()))
             .expect("staged");
         let review = library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         assert_eq!(review.replaces.as_deref(), Some("First"));
         assert!(matches!(
@@ -602,7 +624,7 @@ mod tests {
         )]);
         let staged = library.stage(&Source::Folder(source)).expect("staged");
         let review = library
-            .review(&staged.token, &manifest(), &aliased)
+            .review(&staged.token, &manifest(), 0.5, &aliased)
             .expect("reviewed");
         assert_eq!(review.replaces.as_deref(), Some("Mine"));
         assert_eq!(review.name, "Mine");
@@ -618,7 +640,7 @@ mod tests {
             let model3 = model_folder(&tmp.path(&format!("source-{stem}")), stem);
             let staged = library.stage(&Source::File(model3)).expect("staged");
             let review = library
-                .review(&staged.token, &manifest(), &Preferences::new())
+                .review(&staged.token, &manifest(), 0.5, &Preferences::new())
                 .expect("reviewed");
             assert_eq!(review.name, stem);
             library.commit(&staged.token, false).expect("committed");
@@ -665,7 +687,7 @@ mod tests {
         fs::write(source.join("mapping.json"), mapping.to_string()).expect("write mapping.json");
         let staged = library.stage(&Source::Folder(source)).expect("staged");
         library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 
@@ -701,7 +723,7 @@ mod tests {
             .stage(&Source::Folder(source.clone()))
             .expect("staged");
         library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
         source
@@ -771,7 +793,7 @@ mod tests {
 
         let staged = library.stage(&Source::Folder(source)).expect("staged");
         let review = library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         // The kept edits are checked, not the pack's mapping: exp_02, not exp_01.
         assert!(
@@ -820,7 +842,7 @@ mod tests {
         let model3 = vts_folder(&tmp.path("source"));
         let staged = library.stage(&Source::File(model3)).expect("staged");
         let review = library
-            .review(&staged.token, &vts_manifest(), &Preferences::new())
+            .review(&staged.token, &vts_manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         assert!(review.warnings.is_empty(), "{:?}", review.warnings);
         // Only "angry" is mapped, so the editor should open.
@@ -856,7 +878,7 @@ mod tests {
             .expect("write character.json");
         let staged = library.stage(&Source::Folder(source)).expect("staged");
         library
-            .review(&staged.token, &vts_manifest(), &Preferences::new())
+            .review(&staged.token, &vts_manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 
@@ -874,7 +896,7 @@ mod tests {
             .stage(&Source::File(model_folder(&tmp.path("source"), "m")))
             .expect("staged");
         library
-            .review(&staged.token, &manifest(), &Preferences::new())
+            .review(&staged.token, &manifest(), 0.5, &Preferences::new())
             .expect("reviewed");
         library.commit(&staged.token, false).expect("committed");
 

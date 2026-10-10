@@ -23,6 +23,16 @@ pub struct ModelFiles {
 }
 
 impl ModelFiles {
+    /// The moc, which `parse` puts first in `required`.
+    pub fn moc(&self) -> &str {
+        self.required.first().map_or("", String::as_str)
+    }
+
+    /// The textures, which follow the moc in `required`.
+    pub fn textures(&self) -> &[String] {
+        self.required.get(1..).unwrap_or_default()
+    }
+
     /// Records an optional file and returns its safe path, if it has one.
     fn optional(&mut self, value: Option<&Value>) -> Option<String> {
         let raw = value.and_then(Value::as_str)?;
