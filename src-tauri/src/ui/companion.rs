@@ -1,7 +1,7 @@
 use std::sync::{Mutex, PoisonError};
 
 use tauri::{
-    AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewWindow, Window, WindowEvent,
+    AppHandle, LogicalSize, Manager, PhysicalPosition, Webview, WebviewWindow, Window, WindowEvent,
 };
 use tauri_specta::Event;
 use tracing::warn;
@@ -54,10 +54,17 @@ pub fn set_visible(app: &AppHandle, visible: bool) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
+    // Hiding only the window leaves WebView2 thinking the page is visible, so the render
+    // loop keeps drawing (`document.hidden` stays false). Hiding the webview as well marks
+    // the page hidden, which stops the loop and throttles its timers.
+    let webview: &Webview = window.as_ref();
     let result = if visible {
-        window.show().and_then(|()| window.set_focus())
+        window
+            .show()
+            .and_then(|()| webview.show())
+            .and_then(|()| window.set_focus())
     } else {
-        window.hide()
+        webview.hide().and_then(|()| window.hide())
     };
     if let Err(error) = result {
         warn!(%error, visible, "failed to change companion visibility");
