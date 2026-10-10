@@ -6,7 +6,7 @@ import type { CubismModel } from "@cubism/framework/model/cubismmodel";
 import { CubismUserModel } from "@cubism/framework/model/cubismusermodel";
 import { CubismMotionManager } from "@cubism/framework/motion/cubismmotionmanager";
 import { BaseExpressions } from "@/live2d/baseExpressions";
-import { timeUpdate } from "@/live2d/coreCost";
+import { coreHeapBytes, timeUpdate } from "@/live2d/coreCost";
 import { CUBISM_SHADER_PATH, startCubism } from "@/live2d/cubism";
 import { Expressions } from "@/live2d/expressions";
 import { type Bounds, boundsOf } from "@/live2d/framing";
@@ -194,6 +194,11 @@ export class Live2DModel extends CubismUserModel {
     private readonly settings: ModelSettings,
   ) {
     super();
+  }
+
+  /** The Cubism Core's heap; see `coreHeapBytes`. */
+  get coreHeapBytes(): number {
+    return coreHeapBytes(this.getModel().getModel());
   }
 
   /** Width over height of the model canvas. */

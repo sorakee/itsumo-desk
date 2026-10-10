@@ -1,4 +1,5 @@
-// What a model costs the Cubism Core, for the heavy-model check at import (D49).
+// What a model costs the Cubism Core, for the heavy-model check at import (D49) and for
+// releasing the Core's memory after a heavy model.
 
 /** The part of a Core model the timing needs. */
 export interface Updatable {
@@ -31,3 +32,10 @@ export function timeUpdate(model: Updatable, now: () => number = () => performan
   return samples[samples.length >> 1] ?? 0;
 }
 
+/**
+ * The size of the Core's WebAssembly heap, which every moc on the page shares. It grows to
+ * fit the largest model loaded and only shrinks when the page reloads.
+ */
+export function coreHeapBytes(model: Live2DCubismCore.Model): number {
+  return model.parameters.values.buffer.byteLength;
+}
