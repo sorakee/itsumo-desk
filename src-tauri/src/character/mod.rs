@@ -10,6 +10,7 @@ mod pack;
 mod paths;
 mod prefill;
 mod protocol;
+mod weight;
 
 use std::io;
 
@@ -152,6 +153,9 @@ pub struct ImportReview {
     /// Whether the mapping leaves emotions or the idle loop unmapped, so the mapping editor
     /// should open once the character is installed.
     pub needs_mapping: bool,
+    /// Why the model is heavier than the idle budget allows for (D49), one sentence each;
+    /// empty for a typical model.
+    pub heavy: Vec<String>,
 }
 
 /// Runs `f` against the library on a blocking thread: every library call touches the disk.
@@ -301,10 +305,11 @@ pub async fn review(
     app: &AppHandle,
     token: String,
     manifest: ModelManifest,
+    update_ms: f64,
 ) -> Result<ImportReview, CharacterError> {
     let preferences = app.state::<SettingsStore>().get().characters;
     blocking(app, move |library| {
-        library.review(&token, &manifest, &preferences)
+        library.review(&token, &manifest, update_ms, &preferences)
     })
     .await
 }

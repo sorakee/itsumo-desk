@@ -13,6 +13,12 @@ export type StageStatus =
   | { kind: "ready" }
   | { kind: "error"; message: string };
 
+// The Cubism Core's heap grows to fit the largest model the page has loaded and never
+// shrinks: 256 MB after 阿库露中式 (D49) versus the 16 MB default that typical models fit in.
+// Above this, a change of model reloads the page instead, which loads the new active
+// character into a fresh heap.
+const RELOAD_HEAP_BYTES = 64 * 1024 * 1024;
+
 interface ModelStageProps {
   /** Null shows nothing; undefined means the source is not known yet. */
   source: ModelSource | null | undefined;
@@ -55,6 +61,10 @@ export function ModelStage({ source, mapping, onStatusChange }: ModelStageProps)
 
   useEffect(() => {
     if (!stage || source === undefined) return;
+    if ((stage.coreHeapBytes ?? 0) > RELOAD_HEAP_BYTES) {
+      location.reload();
+      return;
+    }
     if (!source) {
       onStatusChange({ kind: "empty" });
       return;

@@ -84,8 +84,8 @@ export function useCharacterImport(onNeedsMapping: (id: string) => void): Charac
         token.current = staged.token;
         setState({ step: "reading", staged });
         const source = { id: staged.character.id, url: staged.modelUrl, extras: staged.extras };
-        const manifest = await inspectModel(source, controller.signal);
-        const review = await reviewImport(staged.token, manifest);
+        const { manifest, updateMs } = await inspectModel(source, controller.signal);
+        const review = await reviewImport(staged.token, manifest, updateMs);
         controller.signal.throwIfAborted();
         setState({ step: "review", staged, manifest, review, name: review.name });
       })().catch((error: unknown) => {

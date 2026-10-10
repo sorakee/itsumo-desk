@@ -51,6 +51,8 @@ export interface Stage {
   readonly manifest: ModelManifest | undefined;
   /** The source of the model on stage, if any. */
   readonly source: ModelSource | undefined;
+  /** The size of the page's Cubism Core heap while a model is on stage. */
+  readonly coreHeapBytes: number | undefined;
   /** How the model on stage is framed, if any. */
   readonly framing: Framing | undefined;
   /** Zooms the framing by `factor`, keeping the model point at viewport height `anchorY` still. */
@@ -317,6 +319,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const stage: Stage = {
     get manifest() {
       return current?.manifest;
+    },
+
+    get coreHeapBytes() {
+      return current?.model.coreHeapBytes;
     },
 
     get source() {
