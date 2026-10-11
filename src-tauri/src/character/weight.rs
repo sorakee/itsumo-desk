@@ -16,8 +16,11 @@ const MAX_UPDATE_MS: f64 = 4.0;
 /// The Core's heap stayed at its 16 MB default for every typical model surveyed (mocs up to
 /// 8 MB) and grew to 256 MB for a 109 MB one.
 const MAX_MOC_BYTES: u64 = 32 * MIB;
-/// Textures are RGBA with mipmaps; four 8192² ones (~1.3 GB) are the case this catches.
+/// Textures are RGBA with mipmaps. Capped at load (below), it takes 13 or more full-size ones.
 const MAX_TEXTURE_BYTES: u64 = 1024 * MIB;
+/// The webview uploads no texture side longer than this (D51). Mirrors `MAX_TEXTURE_SIDE` in
+/// `src/live2d/textureSize.ts`.
+const MAX_TEXTURE_SIDE: u32 = 4096;
 
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
@@ -52,9 +55,10 @@ fn texture_size(path: &Path) -> Option<(u32, u32)> {
     size
 }
 
-/// Video memory for a texture uploaded as RGBA with a full mipmap chain.
+/// Video memory for a texture uploaded as RGBA with a full mipmap chain, each side capped.
 fn texture_bytes((width, height): (u32, u32)) -> u64 {
-    u64::from(width) * u64::from(height) * 4 * 4 / 3
+    let side = |length: u32| u64::from(length.min(MAX_TEXTURE_SIDE));
+    side(width) * side(height) * 4 * 4 / 3
 }
 
 impl Weight {
@@ -134,6 +138,13 @@ mod tests {
     }
 
     #[test]
+    fn texture_memory_caps_each_side() {
+        assert_eq!(texture_bytes((8192, 8192)), texture_bytes((4096, 4096)));
+        assert_eq!(texture_bytes((8192, 16384)), texture_bytes((4096, 4096)));
+        assert_eq!(texture_bytes((2048, 8192)), texture_bytes((2048, 4096)));
+    }
+
+    #[test]
     fn typical_models_are_not_heavy() {
         // Hiyori, Mao, and the largest typical ones surveyed.
         for weight in [
@@ -151,6 +162,12 @@ mod tests {
                 update_ms: 0.6,
                 moc_bytes: Some(MIB),
                 textures: vec![(8192, 16384)],
+            },
+            // huohuo: its four 8192² textures are uploaded at 4096².
+            Weight {
+                update_ms: 1.6,
+                moc_bytes: Some(5 * MIB),
+                textures: vec![(8192, 8192); 4],
             },
         ] {
             assert_eq!(weight.reasons(), Vec::<String>::new(), "{weight:?}");
@@ -179,12 +196,12 @@ mod tests {
         );
 
         let textures = Weight {
-            textures: vec![(8192, 8192); 4],
+            textures: vec![(8192, 8192); 13],
             ..Weight::default()
         };
         assert_eq!(textures.reasons().len(), 1);
         assert!(
-            textures.reasons()[0].contains("1.3 GB"),
+            textures.reasons()[0].contains("1.1 GB"),
             "{:?}",
             textures.reasons()
         );
