@@ -22,6 +22,7 @@ import {
   withExtras,
 } from "@/live2d/modelSettings";
 import type { ModelParameters } from "@/live2d/parameters";
+import { uploadSize } from "@/live2d/textureSize";
 
 /** Where a model lives: the URL of its `model3.json`. Other files resolve relative to it. */
 export interface ModelSource {
@@ -79,10 +80,40 @@ async function fetchOptional<T>(
   }
 }
 
-async function fetchBitmap(url: string, signal: AbortSignal): Promise<ImageBitmap> {
+async function fetchBitmap(
+  url: string,
+  gpuLimit: number,
+  signal: AbortSignal,
+): Promise<ImageBitmap> {
   const blob = await (await fetchOk(url, signal)).blob();
   // The renderer expects premultiplied textures in their stored orientation.
-  return createImageBitmap(blob, { premultiplyAlpha: "premultiply", colorSpaceConversion: "none" });
+  const bitmap = await createImageBitmap(blob, {
+    premultiplyAlpha: "premultiply",
+    colorSpaceConversion: "none",
+  });
+  const size = uploadSize(bitmap.width, bitmap.height, gpuLimit);
+  if (size === undefined) {
+    return bitmap;
+  }
+  try {
+    console.debug(
+      `scaling texture ${url} from ${bitmap.width}×${bitmap.height} to ${size.width}×${size.height}`,
+    );
+    // Resizing the premultiplied bitmap keeps transparent texels from bleeding into edges.
+    return await createImageBitmap(bitmap, {
+      resizeWidth: size.width,
+      resizeHeight: size.height,
+      resizeQuality: "high",
+    });
+  } finally {
+    bitmap.close();
+  }
+}
+
+function maxTextureSize(gl: WebGL2RenderingContext): number {
+  const limit: unknown = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  // WebGL2 guarantees at least 2048.
+  return typeof limit === "number" ? limit : 2048;
 }
 
 function createTexture(gl: WebGL2RenderingContext, bitmap: ImageBitmap): WebGLTexture {
@@ -215,10 +246,13 @@ export class Live2DModel extends CubismUserModel {
     const settings = await fetchSettings(source, signal);
     const at = (path: string | undefined) =>
       path === undefined ? undefined : resolve(source, path);
+    const gpuLimit = maxTextureSize(gl);
 
     const [moc, bitmaps, physics, pose, displayInfo] = await Promise.all([
       fetchBytes(resolve(source, settings.moc), signal),
-      Promise.all(settings.textures.map((path) => fetchBitmap(resolve(source, path), signal))),
+      Promise.all(
+        settings.textures.map((path) => fetchBitmap(resolve(source, path), gpuLimit, signal)),
+      ),
       fetchOptional(at(settings.physics), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.pose), signal, (r) => r.arrayBuffer()),
       fetchOptional(at(settings.displayInfo), signal, (r) => r.json()),
