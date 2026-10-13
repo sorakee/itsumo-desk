@@ -73,17 +73,15 @@ function Get-Role([int]$id, [string]$name) {
   "webview browser"
 }
 
-# Running time (100 ns units) per PID and engine type, summed over engine instances.
+# Running time (100 ns units) per engine instance, keyed "PID|engine type|instance". Kept per
+# instance so a counter that restarts between samples can be told apart from real work.
 function Get-GpuEngines([hashtable]$tree) {
   $result = @{}
   foreach ($row in Get-CimInstance Win32_PerfRawData_GPUPerformanceCounters_GPUEngine) {
     if ($row.Name -notmatch "^pid_(\d+)_.*_engtype_(.+)$") { continue }
     $id = [int]$Matches[1]
     if (-not $tree.ContainsKey($id)) { continue }
-    $key = "$id|$($Matches[2])"
-    $prev = 0
-    if ($result.ContainsKey($key)) { $prev = $result[$key].Running }
-    $result[$key] = @{ Running = $prev + [double]$row.RunningTime; Time = [double]$row.Timestamp_Sys100NS }
+    $result["$id|$($Matches[2])|$($row.Name)"] = [double]$row.RunningTime
   }
   $result
 }
@@ -166,7 +164,10 @@ for ($step = 1; $step -le $steps; $step++) {
   }
   foreach ($key in $gpu.Keys) {
     if (-not $prevGpu.ContainsKey($key)) { continue }
-    $delta = $gpu[$key].Running - $prevGpu[$key].Running
+    $delta = $gpu[$key] - $prevGpu[$key]
+    # One engine cannot run longer than the wall time; anything else is a reset counter (one
+    # run read 2.97e12%).
+    if ($delta -lt 0 -or $delta -gt $wall) { continue }
     $type = $key.Split("|")[1]
     if (-not $engines.ContainsKey($type)) { $engines[$type] = 0.0 }
     $engines[$type] += $delta
