@@ -4,6 +4,7 @@
 import { CubismMatrix44 } from "@cubism/framework/math/cubismmatrix44";
 import { CubismRenderer_WebGL } from "@cubism/framework/rendering/cubismrenderer_webgl";
 import { startCubism } from "@/live2d/cubism";
+import { FrameClock } from "@/live2d/frameClock";
 import {
   type Bounds,
   clampFraming,
@@ -105,9 +106,6 @@ const MAX_FPS = 60;
 // is kept while the cursor is over the window (the hit test reads back drawn frames) or a
 // preset plays.
 const IDLE_FPS = 30;
-// Slightly under the frame time, so vsync jitter does not skip a frame.
-const MIN_FRAME_MS = 1000 / MAX_FPS - 1;
-const IDLE_MIN_FRAME_MS = 1000 / IDLE_FPS - 1;
 // Caps the physics step after a stall so hair does not fly off.
 const MAX_DELTA_SECONDS = 0.1;
 // Premultiplied alpha (0-255) from which a pixel counts as part of the model; anti-aliased
@@ -151,24 +149,20 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   let lastProbe = 0;
   let hit = false;
   let pending: AbortController | undefined;
-  let frame: number | undefined;
-  let lastFrame: number | undefined;
   let contextLost = false;
   let disposed = false;
 
-  function drawFrame(now: number) {
-    frame = requestAnimationFrame(drawFrame);
+  const clock = new FrameClock(drawFrame, () => 1000 / (fullRate() ? MAX_FPS : IDLE_FPS));
+
+  function fullRate(): boolean {
+    return pointer !== null || current?.life.presets.playing === true;
+  }
+
+  function drawFrame(now: number, elapsedMs: number | undefined) {
     if (!current) {
       return;
     }
-    const minFrameMs =
-      pointer !== null || current.life.presets.playing ? MIN_FRAME_MS : IDLE_MIN_FRAME_MS;
-    if (lastFrame !== undefined && now - lastFrame < minFrameMs) {
-      return;
-    }
-    const delta =
-      lastFrame === undefined ? 0 : Math.min((now - lastFrame) / 1000, MAX_DELTA_SECONDS);
-    lastFrame = now;
+    const delta = elapsedMs === undefined ? 0 : Math.min(elapsedMs / 1000, MAX_DELTA_SECONDS);
     render(current, delta);
 
     if (pointer && (probeDue || now - lastProbe >= REPROBE_MS)) {
@@ -225,7 +219,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
   /**
    * Reads the alpha under the pointer. The drawing buffer is not preserved, so this must run
-   * in the frame that drew it.
+   * in the task that drew it (a timer frame or an animation frame alike).
    */
   function probe(point: Point, now: number) {
     probeDue = false;
@@ -252,13 +246,12 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
   /** Runs the loop only while there is something visible to draw. */
   function syncLoop() {
+    // Hidden pages still run timers (throttled), so the clock is stopped explicitly.
     const shouldRun = !disposed && !contextLost && current !== undefined && !document.hidden;
-    if (shouldRun && frame === undefined) {
-      lastFrame = undefined;
-      frame = requestAnimationFrame(drawFrame);
-    } else if (!shouldRun && frame !== undefined) {
-      cancelAnimationFrame(frame);
-      frame = undefined;
+    if (shouldRun) {
+      clock.start();
+    } else {
+      clock.stop();
     }
   }
 
@@ -286,9 +279,11 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       : Math.round(entry.contentRect.height * devicePixelRatio);
     // Resizing clears the canvas; redraw before this paint instead of showing a blank frame
     // until the next animation frame, which flickers while the window is being scaled.
-    if (current && frame !== undefined) {
+    if (current && clock.running) {
       render(current, 0);
     }
+    // A new device-pixel size may mean another monitor, with another refresh rate.
+    clock.resample();
   });
   // The device-pixel box also changes when the window moves to a monitor with another scale.
   resizeObserver.observe(canvas, { box: "device-pixel-content-box" });
@@ -374,8 +369,9 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     setPointer(point) {
       pointer = point;
       probeDue = point !== null;
+      clock.hurry();
       // Without a running loop nothing is drawn, so nothing can be hit.
-      if (!point || frame === undefined) {
+      if (!point || !clock.running) {
         setHit(false);
       }
     },
@@ -405,6 +401,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
     playPreset(name) {
       current?.life.presets.play(name);
+      clock.hurry();
     },
 
     stopPreset() {
