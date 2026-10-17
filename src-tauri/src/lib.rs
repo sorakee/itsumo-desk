@@ -1,6 +1,7 @@
 mod character;
 mod commands;
 mod events;
+mod llm;
 mod platform;
 mod settings;
 mod ui;
@@ -10,7 +11,7 @@ use tauri_specta::{collect_commands, collect_events, Builder};
 use tracing::warn;
 
 use character::CharacterLibrary;
-use settings::SettingsStore;
+use settings::{Keychain, SettingsStore};
 
 /// Folder under `%APPDATA%` that holds `config.json` and the character packs.
 const APP_DIR: &str = "itsumo-desk";
@@ -42,6 +43,16 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             commands::character::review_character_import,
             commands::character::commit_character_import,
             commands::character::cancel_character_import,
+            commands::providers::provider_presets,
+            commands::providers::list_providers,
+            commands::providers::add_provider,
+            commands::providers::update_provider,
+            commands::providers::remove_provider,
+            commands::providers::set_main_provider,
+            commands::providers::set_provider_key,
+            commands::providers::clear_provider_key,
+            commands::providers::provider_models,
+            commands::providers::test_provider,
         ])
         .events(collect_events![
             events::CursorMoved,
@@ -49,7 +60,8 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             events::ResetFraming,
             events::ActiveCharacterChanged,
             events::CharactersChanged,
-            events::MappingChanged
+            events::MappingChanged,
+            events::ProvidersChanged
         ])
 }
 
@@ -79,6 +91,7 @@ pub fn run() {
             ipc.mount_events(app);
             let config_dir = app.path().config_dir()?.join(APP_DIR);
             app.manage(SettingsStore::open(&config_dir));
+            app.manage(Keychain::new(platform::CredentialManager::new()?));
             app.manage(CharacterLibrary::open(config_dir.join(CHARACTERS_DIR)));
             ui::setup(app.handle())?;
             Ok(())

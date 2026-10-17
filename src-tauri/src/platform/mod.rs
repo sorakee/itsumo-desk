@@ -5,7 +5,7 @@
 mod windows;
 
 #[cfg(windows)]
-pub use self::windows::SystemCursor;
+pub use self::windows::{CredentialManager, SystemCursor};
 
 #[cfg(windows)]
 use tauri::WebviewWindow;
@@ -26,6 +26,15 @@ pub enum PlatformError {
 pub trait CursorSource: Send + Sync + 'static {
     /// The global cursor position. Fails while the secure desktop (lock screen, UAC) is up.
     fn cursor_position(&self) -> Result<ScreenPoint, PlatformError>;
+}
+
+/// Secrets the OS keeps for the current user (API keys). The store namespaces `name`.
+pub trait SecretStore: Send + Sync + 'static {
+    /// `None` if nothing is stored under `name`.
+    fn get(&self, name: &str) -> Result<Option<String>, PlatformError>;
+    fn set(&self, name: &str, secret: &str) -> Result<(), PlatformError>;
+    /// Succeeds when nothing was stored.
+    fn delete(&self, name: &str) -> Result<(), PlatformError>;
 }
 
 /// Window operations Tauri does not offer.

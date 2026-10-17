@@ -35,10 +35,19 @@ tauri-plugin-dialog = "2"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Already in the tree through Tauri; encodes and decodes character-pack URLs.
 percent-encoding = "2"
+# LLM provider calls with streamed replies. native-tls is SChannel on Windows: no C build,
+# unlike the default rustls (aws-lc-rs), and it uses the OS certificate store.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream", "json", "http2", "system-proxy"] }
+# API keys in the OS credential store; the store crate below is the Windows backend.
+keyring-core = "1"
+# Already in the tree through reqwest; stream types for provider replies.
+futures-util = { version = "0.3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # Already in the tree through Tauri at this version; used directly by `platform/windows`.
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+# Windows Credential Manager for keyring-core; no regex search feature needed.
+windows-native-keyring-store = { version = "1", default-features = false }
 
 [lints.rust]
 # `platform/` opts back in per block with a SAFETY comment.

@@ -44,3 +44,8 @@ pub struct MappingChanged {
 /// A character was installed or removed.
 #[derive(Debug, Clone, Copy, Serialize, Type, Event)]
 pub struct CharactersChanged;
+
+/// A provider profile was added, edited or removed, its key was set or cleared, or chat
+/// switched to another profile.
+#[derive(Debug, Clone, Copy, Serialize, Type, Event)]
+pub struct ProvidersChanged;

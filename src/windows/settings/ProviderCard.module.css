@@ -1,0 +1,141 @@
+.card {
+  padding: 14px 16px 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-raised);
+}
+
+.form {
+  margin: 0;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Reads as the card's title until focused. */
+.name {
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+  margin-left: -7px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.name:hover {
+  border-color: var(--color-divider);
+}
+
+.name:focus-visible {
+  border-color: var(--color-accent);
+  outline: 1px solid var(--color-accent);
+  background: var(--color-surface-sunken);
+}
+
+.badge {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  font-size: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.confirm {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.preset {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 14px;
+}
+
+.label {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input:focus-visible {
+  border-color: var(--color-accent);
+  outline: 1px solid var(--color-accent);
+}
+
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.checkbox {
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.warning {
+  margin: 12px 0 0;
+  color: var(--color-warning);
+  font-size: 0.875rem;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}

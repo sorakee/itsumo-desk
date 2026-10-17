@@ -36,7 +36,7 @@ export function CharactersSection({ onEditMapping }: CharactersSectionProps) {
   }
 
   return (
-    <section className={styles.section} aria-labelledby="characters-title">
+    <section aria-labelledby="characters-title">
       <div className={styles.header}>
         <div>
           <h2 id="characters-title" className={styles.title}>

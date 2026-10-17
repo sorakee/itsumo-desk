@@ -1,7 +1,11 @@
 //! User settings persisted to `%APPDATA%/itsumo-desk/config.json`.
 
+mod keychain;
+mod providers;
 mod store;
 
+pub use keychain::{Keychain, KeychainError};
+pub use providers::{Capabilities, Preset, ProviderProfile, Roles};
 pub use store::SettingsStore;
 
 use std::collections::BTreeMap;
@@ -17,6 +21,9 @@ pub struct Settings {
     pub active_character: Option<String>,
     /// Per-character preferences, keyed by character id.
     pub characters: BTreeMap<String, CharacterSettings>,
+    /// LLM provider profiles, in the order they were added (D61).
+    pub providers: Vec<ProviderProfile>,
+    pub roles: Roles,
 }
 
 impl Settings {
@@ -34,6 +41,7 @@ impl Settings {
                 .and_then(|name| crate::character::display_name(&name).ok().flatten());
         }
         self.characters.retain(|_, character| !character.is_empty());
+        providers::sanitize(&mut self.providers, &mut self.roles);
         self
     }
 
