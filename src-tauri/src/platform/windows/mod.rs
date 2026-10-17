@@ -1,11 +1,15 @@
 //! Windows implementations of the platform traits.
 
+mod credentials;
+
 use ::windows::Win32::{
     Foundation::{HWND, POINT},
     UI::WindowsAndMessaging::{
         GetCursorPos, SetWindowPos, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
     },
 };
+
+pub use credentials::CredentialManager;
 
 use super::{CursorSource, PlatformError, ScreenPoint};
 

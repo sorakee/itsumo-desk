@@ -5,5 +5,6 @@ export * from "./app";
 export { type AppError, type AppInfo, commands } from "./bindings";
 export * from "./character";
 export * from "./companion";
+export * from "./providers";
 export { IpcError } from "./result";
 export * from "./window";

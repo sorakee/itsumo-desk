@@ -12,11 +12,19 @@ pub enum AppError {
     Window(String),
     #[error("{0}")]
     Character(String),
+    #[error("{0}")]
+    Provider(String),
 }
 
 impl From<tauri::Error> for AppError {
     fn from(error: tauri::Error) -> Self {
         Self::Window(error.to_string())
+    }
+}
+
+impl From<crate::llm::ProviderError> for AppError {
+    fn from(error: crate::llm::ProviderError) -> Self {
+        Self::Provider(error.to_string())
     }
 }
 

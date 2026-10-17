@@ -26,7 +26,7 @@ pub use manifest::ModelManifest;
 pub use mapping::Mapping;
 pub use names::display_name;
 pub use pack::ModelExtras;
-pub use paths::is_valid_id;
+pub use paths::{is_valid_id, unique_id};
 pub use protocol::{handle as handle_protocol, SCHEME};
 
 use crate::{

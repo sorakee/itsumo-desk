@@ -4,5 +4,6 @@ pub mod app;
 pub mod character;
 pub mod companion;
 mod error;
+pub mod providers;
 
 pub use error::AppError;
