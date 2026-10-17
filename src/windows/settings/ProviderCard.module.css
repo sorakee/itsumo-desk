@@ -1,8 +1,8 @@
 .card {
   padding: 14px 16px 16px;
-  border: 1px solid var(--color-divider);
   border-radius: var(--radius-card);
   background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
 }
 
 .form {
@@ -36,17 +36,23 @@
 }
 
 .name:focus-visible {
-  border-color: var(--color-accent);
-  outline: 1px solid var(--color-accent);
-  background: var(--color-surface-sunken);
+  border-color: var(--color-focus);
+  outline: none;
+  background: var(--color-field);
 }
 
 .badge {
   flex: none;
   padding: 1px 8px;
   border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
-  font-size: 0.75rem;
+  background: var(--comic-yellow);
+  box-shadow: var(--shadow-control-pressed);
+  color: var(--comic-ink);
+  font-size: 0.6875rem;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .actions {
@@ -86,9 +92,9 @@
   width: 100%;
   max-width: 480px;
   padding: 5px 8px;
-  border: 1px solid var(--color-outline);
+  border: 2px solid var(--color-field-border);
   border-radius: var(--radius-control);
-  background: var(--color-surface-sunken);
+  background: var(--color-field);
   color: var(--color-text);
   font: inherit;
   font-size: 0.875rem;
@@ -99,8 +105,8 @@
 }
 
 .input:focus-visible {
-  border-color: var(--color-accent);
-  outline: 1px solid var(--color-accent);
+  border-color: var(--color-focus);
+  outline: none;
 }
 
 .capabilities {
@@ -119,8 +125,7 @@
 }
 
 .checkbox {
-  margin: 0;
-  accent-color: var(--color-accent);
+  composes: checkbox from "./BaseExpressionList.module.css";
 }
 
 .hint {

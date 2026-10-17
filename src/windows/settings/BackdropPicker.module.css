@@ -1,0 +1,52 @@
+.swatches {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+/* Named for screen readers; the swatches speak for themselves on screen. */
+.legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid var(--color-field-border);
+  border-radius: 50%;
+  box-shadow: var(--shadow-control-pressed);
+  cursor: pointer;
+}
+
+.swatch[data-backdrop="light"] {
+  background: var(--stage-light);
+}
+
+.swatch[data-backdrop="grey"] {
+  background: var(--stage-grey);
+}
+
+.swatch[data-backdrop="dark"] {
+  background: var(--stage-dark);
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: var(--comic-orange);
+  box-shadow:
+    0 0 0 2px var(--comic-yellow),
+    var(--shadow-control-pressed);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

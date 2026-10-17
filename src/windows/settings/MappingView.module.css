@@ -40,7 +40,7 @@
 }
 
 .back:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 
@@ -75,9 +75,17 @@
 .preview {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--color-divider);
   border-radius: var(--radius-card);
-  background: var(--color-surface-sunken);
+  background: var(--stage-light);
+  box-shadow: var(--shadow-card);
+}
+
+.preview[data-backdrop="grey"] {
+  background: var(--stage-grey);
+}
+
+.preview[data-backdrop="dark"] {
+  background: var(--stage-dark);
 }
 
 .canvas {
@@ -107,6 +115,8 @@
 }
 
 .viewHint {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   color: var(--color-text-muted);
   text-overflow: ellipsis;
@@ -116,9 +126,10 @@
 .resetView {
   flex: none;
   padding: 2px 10px;
-  border: 1px solid var(--color-divider);
+  border: none;
   border-radius: var(--radius-control);
   background: var(--color-surface-raised);
+  box-shadow: var(--shadow-control-pressed);
   color: var(--color-text);
   font: inherit;
   cursor: pointer;
@@ -129,7 +140,7 @@
 }
 
 .resetView:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 
@@ -169,4 +180,9 @@
   margin: 0;
   color: var(--color-danger);
   font-size: 0.875rem;
+}
+
+/* Muted ink would vanish on the dark backdrop. */
+.preview[data-backdrop="dark"] .status {
+  color: var(--comic-paper);
 }

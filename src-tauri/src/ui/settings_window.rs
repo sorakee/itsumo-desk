@@ -4,7 +4,7 @@ use tracing::warn;
 const LABEL: &str = "settings";
 
 /// The page's `--color-surface`, painted until the page loads so it does not flash white.
-const BACKGROUND: Color = Color(0x2b, 0x2c, 0x33, 0xff);
+const BACKGROUND: Color = Color(0xb3, 0xdc, 0xd2, 0xff);
 
 /// Focuses the settings window, creating it if needed. It is destroyed on close rather than
 /// hidden, so it costs nothing while the user is not looking at it.

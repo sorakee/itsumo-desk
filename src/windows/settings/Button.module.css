@@ -1,48 +1,62 @@
+/* Comic style (D62): flat colour, offset ink shadow, bold italic caps. */
 .button {
-  padding: 6px 14px;
-  border: 1px solid transparent;
+  padding: 6px 14px 5px;
+  border: none;
   border-radius: var(--radius-control);
+  box-shadow: var(--shadow-control);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   line-height: 1.4;
+  text-transform: uppercase;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    transform 100ms ease-out,
+    box-shadow 100ms ease-out;
+}
+
+.button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-control-raised);
+}
+
+.button:active:not(:disabled) {
+  transform: translate(1px, 2px);
+  box-shadow: var(--shadow-control-pressed);
 }
 
 .button:disabled {
-  opacity: 0.5;
+  background: var(--hatch);
+  box-shadow: none;
+  color: var(--color-accent);
   cursor: default;
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 .primary {
-  background: var(--color-accent);
-  color: #fff;
-}
-
-.primary:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--comic-yellow);
+  color: var(--comic-orange-deep);
 }
 
 .secondary {
-  border-color: var(--color-divider);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-sunken);
   color: var(--color-text);
 }
 
-.secondary:hover:not(:disabled) {
-  border-color: var(--color-outline);
-}
-
 .danger {
-  background: var(--color-danger);
-  color: #fff;
+  background: var(--comic-coral);
+  color: var(--comic-paper);
 }
 
-.danger:hover:not(:disabled) {
-  filter: brightness(1.1);
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
 }
