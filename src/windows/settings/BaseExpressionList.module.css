@@ -18,8 +18,34 @@
 
 .checkbox {
   flex: none;
+  width: 18px;
+  height: 18px;
   margin: 0;
-  accent-color: var(--color-accent);
+  border: 2px solid var(--color-field-border);
+  border-radius: 5px 6px 4px 6px / 6px 4px 6px 5px;
+  background: var(--color-field);
+  box-shadow: 2px 2px 0 var(--comic-shadow);
+  appearance: none;
+  cursor: pointer;
+}
+
+.checkbox:checked {
+  border-color: var(--comic-ink);
+  background: var(--comic-yellow);
+  box-shadow:
+    inset 0 0 0 3px var(--color-field),
+    2px 2px 0 var(--comic-shadow);
+}
+
+.checkbox:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.checkbox:disabled {
+  background: var(--hatch);
+  box-shadow: none;
+  cursor: default;
 }
 
 .label {

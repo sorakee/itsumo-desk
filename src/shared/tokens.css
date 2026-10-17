@@ -1,32 +1,59 @@
 :root {
-  --font-ui: "Segoe UI", system-ui, sans-serif;
-  --color-text: #f2f2f5;
-  --color-text-muted: #a0a0ab;
-  /* Also the settings window's native background (BACKGROUND in settings_window.rs). */
-  --color-surface: #2b2c33;
-  --color-surface-translucent: rgb(43 44 51 / 60%);
-  --color-surface-raised: #34353d;
-  --color-surface-sunken: #23242a;
-  --color-outline: rgb(242 242 245 / 35%);
-  --color-divider: rgb(242 242 245 / 10%);
-  --color-accent: #2f8fdd;
-  --color-accent-hover: #4a9fe4;
-  --color-danger: #e5534b;
-  --color-warning: #e3b341;
-  --color-favorite: #f2c94c;
-  --color-backdrop: rgb(15 15 20 / 65%);
-  --radius-control: 6px;
-  --radius-card: 10px;
+  /* Segoe UI has no Japanese or Chinese glyphs; name the Windows UI font that has them so the
+     fallback does not depend on the browser's pick. */
+  --font-ui: "Segoe UI", "Yu Gothic UI", system-ui, sans-serif;
 
-  /* Comic pastel palette for the companion's own UI (D41). */
+  /* Comic pastel palette (D41), shared by the companion's UI and the settings window (D62). */
   --comic-ink: #1d2242;
   --comic-paper: #fffdf6;
+  --comic-mint: #b3dcd2;
   --comic-coral: #ef6461;
   --comic-teal: #2f8a96;
   --comic-orange: #f47b20;
+  /* Orange for text on yellow, where the bright one is hard to read. */
+  --comic-orange-deep: #b3530a;
   --comic-yellow: #f2d97a;
   --comic-shadow: rgb(29 34 66 / 45%);
 
+  --color-text: var(--comic-ink);
+  --color-text-muted: #4c5675;
+  /* Also the settings window's native background (BACKGROUND in settings_window.rs). */
+  --color-surface: var(--comic-mint);
+  --color-surface-translucent: rgb(255 253 246 / 80%);
+  --color-surface-raised: var(--comic-paper);
+  --color-surface-sunken: #e6f3ef;
+  --color-field: #ffffff;
+  --color-field-border: rgb(29 34 66 / 22%);
+  --color-outline: rgb(29 34 66 / 40%);
+  --color-divider: rgb(29 34 66 / 12%);
+  --color-accent: var(--comic-teal);
+  --color-accent-hover: #267480;
+  --color-focus: var(--comic-orange);
+  /* Darker than the palette's coral and orange so small text stays readable on paper. */
+  --color-danger: #d4473f;
+  --color-warning: #b35609;
+  --color-favorite: var(--comic-orange);
+  --color-backdrop: rgb(29 34 66 / 45%);
+  /* Mapping preview backgrounds: a pale model can vanish on the light one. */
+  --stage-light: #e6f3ef;
+  --stage-grey: #8e98a6;
+  --stage-dark: #2b2c33;
+
+  /* Slightly uneven corners, like hand-cut paper. */
+  --radius-control: 9px 11px 8px 12px / 11px 8px 12px 9px;
+  --radius-card: 14px 18px 13px 17px / 17px 13px 18px 14px;
+  --shadow-control: 2px 3px 0 var(--comic-shadow);
+  --shadow-control-raised: 3px 5px 0 var(--comic-shadow);
+  --shadow-control-pressed: 1px 1px 0 var(--comic-shadow);
+  --shadow-card: 4px 5px 0 var(--comic-shadow);
+  /* Disabled controls are striped, as in the reference sheet, rather than faded. */
+  --hatch: repeating-linear-gradient(
+    -45deg,
+    rgb(47 138 150 / 30%) 0 5px,
+    rgb(47 138 150 / 8%) 5px 11px
+  );
+
+  color-scheme: light;
   font-family: var(--font-ui);
   color: var(--color-text);
 }
@@ -34,4 +61,25 @@
 /* No background here: the companion window is transparent. Each window's root sets its own. */
 body {
   margin: 0;
+}
+
+/* Comic scrollbars: a teal pill on no track, inset by a transparent border. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px 7px 5px 7px / 7px 5px 7px 6px;
+  background: var(--comic-teal) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--comic-ink);
 }

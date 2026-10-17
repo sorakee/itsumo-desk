@@ -11,9 +11,10 @@
   max-width: 100%;
   padding: 4px 10px;
   overflow: hidden;
-  border: 1px solid var(--color-divider);
+  border: 2px solid var(--color-field-border);
   border-radius: 999px;
-  background: var(--color-surface);
+  background: var(--color-field);
+  box-shadow: var(--shadow-control-pressed);
   color: var(--color-text);
   font: inherit;
   font-size: 0.8125rem;
@@ -27,13 +28,13 @@
 }
 
 .chip:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--color-focus);
   outline-offset: 1px;
 }
 
 .chip[aria-pressed="true"] {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 25%, transparent);
+  border-color: var(--comic-orange);
+  background: var(--comic-yellow);
 }
 
 .playIcon {

@@ -2,7 +2,9 @@ import { useMemo, useRef } from "react";
 import type { ModelSource } from "@/live2d/model";
 import { Icon } from "@/shared/Icon";
 import { useCharactersStore } from "@/stores/characters";
+import { BackdropPicker } from "@/windows/settings/BackdropPicker";
 import { MappingPanels } from "@/windows/settings/MappingPanels";
+import { usePreviewBackdrop } from "@/windows/settings/previewBackdrop";
 import { useCharacterMapping } from "@/windows/settings/useCharacterMapping";
 import { usePreviewStage } from "@/windows/settings/usePreviewStage";
 import styles from "./MappingView.module.css";
@@ -26,6 +28,7 @@ export function MappingView({ id, imported, onBack }: MappingViewProps) {
     [id, model],
   );
   const { status: preview, resetView } = usePreviewStage(canvasRef, source);
+  const [backdrop, setBackdrop] = usePreviewBackdrop();
 
   return (
     <main className={styles.page}>
@@ -46,11 +49,12 @@ export function MappingView({ id, imported, onBack }: MappingViewProps) {
       </header>
 
       <div className={styles.body}>
-        <div className={styles.preview}>
+        <div className={styles.preview} data-backdrop={backdrop}>
           <canvas ref={canvasRef} className={styles.canvas} />
           {preview.kind === "ready" ? (
             <div className={styles.viewBar}>
               <span className={styles.viewHint}>Scroll to zoom, drag to move</span>
+              <BackdropPicker value={backdrop} onChange={setBackdrop} />
               <button type="button" className={styles.resetView} onClick={resetView}>
                 Reset view
               </button>

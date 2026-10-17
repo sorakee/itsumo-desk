@@ -7,8 +7,11 @@
 
 .title {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .hint {
@@ -30,7 +33,7 @@
 .empty {
   margin: 16px 0 0;
   padding: 24px;
-  border: 1px dashed var(--color-divider);
+  border: 2px dashed var(--color-outline);
   border-radius: var(--radius-card);
   color: var(--color-text-muted);
   text-align: center;
