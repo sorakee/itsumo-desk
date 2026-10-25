@@ -9,6 +9,8 @@ import styles from "./ChatInput.module.css";
 const MAX_MESSAGE_CHARS = 2000;
 /** An empty input closes after this long with nothing happening. */
 const IDLE_CLOSE_MS = 30_000;
+/** Measured: a window drag blurs the page for about 3 ms. */
+const BLUR_GRACE_MS = 150;
 
 // Only the pill and the notice catch clicks; beside them they pass through.
 const hitRegion = { [HIT_REGION_ATTRIBUTE]: true };
@@ -36,20 +38,37 @@ export function ChatInput() {
   }, [focusRequest, notReady]);
 
   // Leaving for another app with nothing typed closes it. Presses elsewhere in the window
-  // (dragging the companion) keep the focus here, so typing carries on afterwards.
+  // keep the focus here. Dragging the companion hands focus to the native window and back
+  // within a few milliseconds, so a blur only counts once the page is still unfocused a
+  // moment later, and returning focus goes back to the input.
   const empty = draft.trim() === "";
   useEffect(() => {
+    let blurTimer: ReturnType<typeof setTimeout> | undefined;
     function onMouseDown(event: MouseEvent) {
       const dock = dockRef.current;
       if (dock && event.target instanceof Node && !dock.contains(event.target)) {
         event.preventDefault();
       }
     }
+    function onBlur() {
+      if (!empty) return;
+      clearTimeout(blurTimer);
+      blurTimer = setTimeout(() => {
+        if (!document.hasFocus()) closeInput();
+      }, BLUR_GRACE_MS);
+    }
+    function onFocus() {
+      clearTimeout(blurTimer);
+      (inputRef.current ?? settingsRef.current)?.focus();
+    }
     window.addEventListener("mousedown", onMouseDown, true);
-    if (empty) window.addEventListener("blur", closeInput);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
     return () => {
+      clearTimeout(blurTimer);
       window.removeEventListener("mousedown", onMouseDown, true);
-      window.removeEventListener("blur", closeInput);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
     };
   }, [empty, closeInput]);
 
