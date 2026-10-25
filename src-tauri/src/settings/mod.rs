@@ -75,6 +75,9 @@ pub struct CompanionSettings {
     pub always_on_top: bool,
     /// Window size as a multiple of the base 480×640 logical pixels.
     pub scale: f64,
+    /// The global shortcut that opens chat, as `ui::hotkey` writes it; `None` for the
+    /// default (D57).
+    pub chat_hotkey: Option<String>,
 }
 
 impl Default for CompanionSettings {
@@ -83,6 +86,7 @@ impl Default for CompanionSettings {
             position: None,
             always_on_top: true,
             scale: 1.0,
+            chat_hotkey: None,
         }
     }
 }

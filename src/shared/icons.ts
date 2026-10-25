@@ -6,6 +6,9 @@ const SLASH = "M3 3l18 18";
 const PUPIL = "M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6";
 
 export const ICONS = {
+  chat: [
+    "M5 4.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-4.5 3.5v-3.5H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z",
+  ],
   pin: [PIN_HEAD, PIN_NEEDLE],
   pinOff: [PIN_HEAD, PIN_NEEDLE, SLASH],
   settings: [

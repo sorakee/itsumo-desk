@@ -1,3 +1,4 @@
+mod agent;
 mod character;
 mod commands;
 mod events;
@@ -10,6 +11,7 @@ use tauri::{Manager, RunEvent};
 use tauri_specta::{collect_commands, collect_events, Builder};
 use tracing::warn;
 
+use agent::Agent;
 use character::CharacterLibrary;
 use settings::{Keychain, SettingsStore};
 
@@ -53,6 +55,11 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             commands::providers::clear_provider_key,
             commands::providers::provider_models,
             commands::providers::test_provider,
+            commands::chat::chat_status,
+            commands::chat::send_chat,
+            commands::chat::report_segment_shown,
+            commands::chat::chat_hotkey,
+            commands::chat::set_chat_hotkey,
         ])
         .events(collect_events![
             events::CursorMoved,
@@ -61,7 +68,10 @@ fn ipc_builder() -> Builder<tauri::Wry> {
             events::ActiveCharacterChanged,
             events::CharactersChanged,
             events::MappingChanged,
-            events::ProvidersChanged
+            events::ProvidersChanged,
+            events::SpeechSegment,
+            events::TurnEnded,
+            events::ChatRequested
         ])
 }
 
@@ -83,6 +93,7 @@ pub fn run() {
             ui::show_companion(app);
         }))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(ui::hotkey_plugin())
         .register_asynchronous_uri_scheme_protocol(character::SCHEME, |ctx, request, responder| {
             character::handle_protocol(ctx.app_handle(), request, responder);
         })
@@ -93,6 +104,7 @@ pub fn run() {
             app.manage(SettingsStore::open(&config_dir));
             app.manage(Keychain::new(platform::CredentialManager::new()?));
             app.manage(CharacterLibrary::open(config_dir.join(CHARACTERS_DIR)));
+            app.manage(Agent::default());
             ui::setup(app.handle())?;
             Ok(())
         })

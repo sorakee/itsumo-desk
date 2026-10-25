@@ -56,6 +56,8 @@ export interface Stage {
   readonly coreHeapBytes: number | undefined;
   /** How the model on stage is framed, if any. */
   readonly framing: Framing | undefined;
+  /** Where the model's face is drawn now, if it has one; it may lie outside the window. */
+  readonly face: Point | undefined;
   /** Zooms the framing by `factor`, keeping the model point at viewport height `anchorY` still. */
   zoomFraming(factor: number, anchorY: number): void;
   /** Moves the model by `dx` right and `dy` down, in CSS pixels. */
@@ -201,20 +203,23 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     model.draw(projection, [0, 0, width, height]);
   }
 
+  /** The model's face as currently framed, in CSS pixels. */
+  function faceOnScreen({ face, framing }: OnStage): Point | undefined {
+    const rect = canvas.getBoundingClientRect();
+    if (!face || rect.height === 0) {
+      return undefined;
+    }
+    const at = modelToWindow(framing, rect.width / rect.height, face);
+    return { x: rect.left + at.x * rect.width, y: rect.top + at.y * rect.height };
+  }
+
   /** The gaze towards the cursor from the model's face as currently framed. */
-  function gazeAt({ face, framing }: OnStage): GazeVector | null {
+  function gazeAt(onStage: OnStage): GazeVector | null {
+    const face = cursor && faceOnScreen(onStage);
     if (!cursor || !face) {
       return null;
     }
-    const rect = canvas.getBoundingClientRect();
-    if (rect.height === 0) {
-      return null;
-    }
-    const at = modelToWindow(framing, rect.width / rect.height, face);
-    return gazeTowards(
-      cursor.x - (rect.left + at.x * rect.width),
-      cursor.y - (rect.top + at.y * rect.height),
-    );
+    return gazeTowards(cursor.x - face.x, cursor.y - face.y);
   }
 
   /**
@@ -326,6 +331,10 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
 
     get framing() {
       return current?.framing;
+    },
+
+    get face() {
+      return current && faceOnScreen(current);
     },
 
     zoomFraming(factor, anchorY) {

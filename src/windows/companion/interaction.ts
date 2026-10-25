@@ -19,6 +19,8 @@ export const HIT_REGION_ATTRIBUTE = "data-hit-region";
 
 // Movement before a press becomes a drag, so a plain click stays a click.
 const DRAG_THRESHOLD_PX = 4;
+// Hit regions whose presses belong to the element, not to window dragging.
+const CONTROLS = "input, textarea, select, button";
 // Per pixel of wheel delta: one 100 px notch scales by about 5%.
 const WHEEL_SENSITIVITY = 0.0005;
 const LINE_HEIGHT_PX = 40;
@@ -110,6 +112,8 @@ export function startInteraction(stage: Stage | null): () => void {
 
   function onPointerDown(event: PointerEvent) {
     if (event.button !== 0 || !(overHitRegion || overModel)) return;
+    // A press in a field selects text and a press on a button clicks it; neither drags.
+    if (event.target instanceof Element && event.target.closest(CONTROLS) !== null) return;
     press = {
       pointerId: event.pointerId,
       startX: event.clientX,

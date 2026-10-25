@@ -1,0 +1,123 @@
+/* The chat pill (D57), comic style like the companion menu (D41). Its height plus the gap
+   below it is INPUT_RESERVE in `SpeechBubble.tsx`. */
+
+.dock {
+  position: absolute;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  user-select: text;
+  pointer-events: none;
+}
+
+.pill {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 420px);
+  min-height: 40px;
+  padding: 4px 6px 4px 16px;
+  border-radius: 20px 23px 19px 22px / 22px 19px 23px 20px;
+  background: var(--comic-paper);
+  color: var(--comic-ink);
+  box-shadow: 3px 4px 0 var(--comic-shadow);
+  animation: rise 180ms ease-out;
+}
+
+.pill:focus-within {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-weight: 600;
+}
+
+.message {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.action {
+  flex: none;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--comic-yellow);
+  color: var(--comic-orange-deep);
+  box-shadow: var(--shadow-control);
+  font: inherit;
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.action:active {
+  box-shadow: var(--shadow-control-pressed);
+  transform: translate(1px, 2px);
+}
+
+/* Errors are the app's voice, not the character's, so they sit on the input, not in the bubble. */
+.notice {
+  pointer-events: auto;
+  box-sizing: border-box;
+  max-width: min(100%, 420px);
+  margin: 0;
+  padding: 5px 12px 6px;
+  border-radius: 12px 14px 11px 13px / 13px 11px 14px 12px;
+  background: var(--comic-coral);
+  color: var(--comic-paper);
+  box-shadow: 2px 3px 0 var(--comic-shadow);
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill {
+    animation: none;
+  }
+}

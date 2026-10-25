@@ -25,10 +25,12 @@ interface ModelStageProps {
   /** The character's mapping; changing it does not reload the model. */
   mapping: StageMapping | null;
   onStatusChange: (status: StageStatus) => void;
+  /** Receives the stage once it exists, and null once it is gone. */
+  onStage?: (stage: Stage | null) => void;
 }
 
 /** Hosts the Live2D canvas. The stage itself lives outside React; see `@/live2d/stage`. */
-export function ModelStage({ source, mapping, onStatusChange }: ModelStageProps) {
+export function ModelStage({ source, mapping, onStatusChange, onStage }: ModelStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stage, setStage] = useState<Stage | null>(null);
 
@@ -53,6 +55,10 @@ export function ModelStage({ source, mapping, onStatusChange }: ModelStageProps)
       setStage(null);
     };
   }, [onStatusChange]);
+
+  useEffect(() => {
+    onStage?.(stage);
+  }, [stage, onStage]);
 
   // Before the load below, so a new model starts with its own mapping.
   useEffect(() => {

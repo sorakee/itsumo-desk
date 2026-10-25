@@ -13,7 +13,7 @@ use tracing::warn;
 
 use super::{
     first_token_timeout, is_plain_http_remote, presets, ChatDelta, ChatMessage, ChatRequest,
-    ErrorKind, LlmError, PresetInfo, Role,
+    ErrorKind, LlmError, LlmProvider, PresetInfo, Role,
 };
 use crate::{
     events::ProvidersChanged,
@@ -26,6 +26,8 @@ use crate::{
 pub enum ProviderError {
     #[error("no provider profile has the id {0}")]
     Unknown(String),
+    #[error("No provider is set up for chat.")]
+    NoChatProvider,
     #[error("{0}")]
     Invalid(String),
     #[error(transparent)]
@@ -201,6 +203,36 @@ pub async fn models(app: &AppHandle, id: String) -> Result<Vec<String>, Provider
         .await
         .map_err(|_| LlmError::new(ErrorKind::Timeout, None))??;
     Ok(models)
+}
+
+/// The provider chat uses, ready to call.
+pub struct ChatProvider {
+    /// The profile's display name, for messages about it.
+    pub name: String,
+    pub first_token_timeout: Duration,
+    pub provider: Box<dyn LlmProvider>,
+}
+
+/// The profile chat uses (the head of the `main` role), refused when it cannot be called.
+pub fn chat_profile(app: &AppHandle) -> Result<ProviderProfile, ProviderError> {
+    let settings = app.state::<SettingsStore>().get();
+    let id = settings
+        .roles
+        .main
+        .first()
+        .ok_or(ProviderError::NoChatProvider)?;
+    ready_profile(app, id, true)
+}
+
+pub async fn chat_provider(app: &AppHandle) -> Result<ChatProvider, ProviderError> {
+    let profile = chat_profile(app)?;
+    let id = profile.id.clone();
+    let key = keychain(app, move |keychain| keychain.provider_key(&id)).await?;
+    Ok(ChatProvider {
+        first_token_timeout: first_token_timeout(&profile.base_url),
+        provider: super::provider(&profile, key),
+        name: profile.name,
+    })
 }
 
 /// Streams a one-sentence reply through `on_event`, which returns false once nobody is

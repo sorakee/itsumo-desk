@@ -49,3 +49,25 @@ pub struct CharactersChanged;
 /// switched to another profile.
 #[derive(Debug, Clone, Copy, Serialize, Type, Event)]
 pub struct ProvidersChanged;
+
+/// One segment of the companion's reply, a sentence or short utterance, sent as soon as it
+/// is complete. The companion shows it as a subtitle; from M3 it also carries the speech.
+/// `index` counts from 0 within the turn.
+#[derive(Debug, Clone, Serialize, Type, Event)]
+pub struct SpeechSegment {
+    pub turn: u32,
+    pub index: u32,
+    pub text: String,
+}
+
+/// A chat turn is over: the reply ended, or `error` says why it stopped. An interrupted turn
+/// sends nothing; the next turn's segments replace it.
+#[derive(Debug, Clone, Serialize, Type, Event)]
+pub struct TurnEnded {
+    pub turn: u32,
+    pub error: Option<String>,
+}
+
+/// The chat hotkey was pressed: the companion opens and focuses its chat input.
+#[derive(Debug, Clone, Copy, Serialize, Type, Event)]
+pub struct ChatRequested;
