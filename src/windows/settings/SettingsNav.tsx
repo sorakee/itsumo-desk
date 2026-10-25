@@ -1,10 +1,11 @@
 import styles from "./SettingsNav.module.css";
 
-export type SettingsPage = "characters" | "providers";
+export type SettingsPage = "characters" | "providers" | "general";
 
 const PAGES: { page: SettingsPage; label: string }[] = [
   { page: "characters", label: "Characters" },
   { page: "providers", label: "Providers" },
+  { page: "general", label: "General" },
 ];
 
 interface SettingsNavProps {

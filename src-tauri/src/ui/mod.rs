@@ -2,6 +2,7 @@
 
 mod companion;
 mod cursor;
+mod hotkey;
 mod placement;
 mod settings_window;
 mod tray;
@@ -12,6 +13,10 @@ pub use companion::{
     always_on_top, framing, save_framing, scale_by as scale_companion, set_always_on_top,
     set_click_through,
 };
+pub use hotkey::{
+    plugin as hotkey_plugin, set as set_chat_hotkey, status as chat_hotkey, HotkeyError,
+    HotkeyStatus,
+};
 pub use settings_window::open as open_settings;
 
 use crate::platform::SystemCursor;
@@ -20,6 +25,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     tray::create(app)?;
     // Before the companion is shown, so the poll learns its first geometry.
     cursor::spawn(app, SystemCursor, companion::LABEL);
+    hotkey::init(app);
     companion::init(app)
 }
 

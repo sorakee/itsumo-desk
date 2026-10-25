@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ActiveCharacter } from "@/ipc";
 import type { ModelSource } from "@/live2d/model";
+import type { Stage } from "@/live2d/stage";
 import { syncCharactersStore, useCharactersStore } from "@/stores/characters";
+import { useChatStore } from "@/stores/chat";
 import { syncCompanionStore } from "@/stores/companion";
 import { useMenuStore } from "@/stores/menu";
+import { ChatInput } from "@/windows/companion/ChatInput";
 import { CompanionMenu } from "@/windows/companion/CompanionMenu";
+import { startChat } from "@/windows/companion/chat";
 import { devModelSource } from "@/windows/companion/devModel";
 import { HIT_REGION_ATTRIBUTE } from "@/windows/companion/interaction";
 import { ModelStage, type StageStatus } from "@/windows/companion/ModelStage";
+import { SpeechBubble } from "@/windows/companion/SpeechBubble";
 import styles from "./CompanionApp.module.css";
 
 const devSource = devModelSource();
@@ -36,6 +41,8 @@ function statusText(status: StageStatus): string | null {
 
 export function CompanionApp() {
   const [status, setStatus] = useState<StageStatus>({ kind: "loading" });
+  const [stage, setStage] = useState<Stage | null>(null);
+  const chatOpen = useChatStore((state) => state.inputOpen);
   const menuAnchor = useMenuStore((state) => state.anchor);
   const active = useCharactersStore((state) => state.active);
   const mapping = useCharactersStore((state) => state.mapping);
@@ -44,10 +51,11 @@ export function CompanionApp() {
 
   useEffect(() => syncCompanionStore(), []);
   useEffect(() => syncCharactersStore(), []);
+  useEffect(() => startChat(), []);
 
   return (
     <main className={styles.stage}>
-      <ModelStage source={source} mapping={mapping} onStatusChange={setStatus} />
+      <ModelStage source={source} mapping={mapping} onStatusChange={setStatus} onStage={setStage} />
       {text && (
         <div className={styles.placeholder} {...hitRegion}>
           <p className={styles.status}>{text}</p>
@@ -57,6 +65,8 @@ export function CompanionApp() {
           )}
         </div>
       )}
+      <SpeechBubble stage={stage} />
+      {chatOpen && <ChatInput />}
       {menuAnchor && <CompanionMenu key={`${menuAnchor.x},${menuAnchor.y}`} anchor={menuAnchor} />}
     </main>
   );

@@ -10,6 +10,7 @@ import {
 } from "@/ipc";
 import type { IconName } from "@/shared/icons";
 import { useCharactersStore } from "@/stores/characters";
+import { useChatStore } from "@/stores/chat";
 import { useCompanionStore } from "@/stores/companion";
 import { CHARACTER_RING_SIZE, characterRing } from "@/windows/companion/characterRing";
 
@@ -42,8 +43,15 @@ const icon = (name: IconName): MenuFace => ({ kind: "icon", icon: name });
 // Nothing to do: choosing the current character only closes the menu.
 const keep = () => Promise.resolve();
 
+// Opens the chat input; the menu closes as it does for any item.
+function openChat(): Promise<void> {
+  useChatStore.getState().openInput();
+  return Promise.resolve();
+}
+
 function mainItems(alwaysOnTop: boolean, hasCharacters: boolean): MenuItem[] {
   return [
+    { id: "chat", face: icon("chat"), label: "Chat", tone: "teal", run: openChat },
     {
       id: "pin",
       face: icon(alwaysOnTop ? "pinOff" : "pin"),

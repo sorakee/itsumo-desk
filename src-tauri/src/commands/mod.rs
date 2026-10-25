@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod character;
+pub mod chat;
 pub mod companion;
 mod error;
 pub mod providers;

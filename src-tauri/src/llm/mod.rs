@@ -16,17 +16,19 @@ use serde::Serialize;
 pub use error::{ErrorKind, LlmError};
 pub use presets::PresetInfo;
 pub use profiles::{
-    add, clear_key, list, models, preset_list, remove, set_key, set_main, test, update,
-    ProviderError, ProviderSummary, ProviderUpdate, TestEvent, TestReport,
+    add, chat_profile, chat_provider, clear_key, list, models, preset_list, remove, set_key,
+    set_main, test, update, ChatProvider, ProviderError, ProviderSummary, ProviderUpdate,
+    TestEvent, TestReport,
 };
 
 use crate::settings::ProviderProfile;
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     System,
     User,
+    Assistant,
 }
 
 #[derive(Debug, Clone, Serialize)]

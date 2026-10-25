@@ -14,6 +14,10 @@ pub enum AppError {
     Character(String),
     #[error("{0}")]
     Provider(String),
+    #[error("{0}")]
+    Chat(String),
+    #[error("{0}")]
+    Hotkey(String),
 }
 
 impl From<tauri::Error> for AppError {
@@ -25,6 +29,18 @@ impl From<tauri::Error> for AppError {
 impl From<crate::llm::ProviderError> for AppError {
     fn from(error: crate::llm::ProviderError) -> Self {
         Self::Provider(error.to_string())
+    }
+}
+
+impl From<crate::agent::AgentError> for AppError {
+    fn from(error: crate::agent::AgentError) -> Self {
+        Self::Chat(error.to_string())
+    }
+}
+
+impl From<crate::ui::HotkeyError> for AppError {
+    fn from(error: crate::ui::HotkeyError) -> Self {
+        Self::Hotkey(error.to_string())
     }
 }
 

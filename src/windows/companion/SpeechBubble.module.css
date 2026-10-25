@@ -1,0 +1,88 @@
+/* Comic speech bubble (D57), in the style of the companion menu's label (D41). */
+
+.bubble {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  width: max-content;
+  /* The window runs from 240 to 960 px wide; vw keeps the bubble in proportion. */
+  max-width: min(320px, 72vw);
+  padding: 0.5em 0.85em 0.55em;
+  border-radius: 16px 20px 15px 19px / 19px 15px 20px 16px;
+  background: var(--comic-paper);
+  color: var(--comic-ink);
+  box-shadow: 3px 4px 0 var(--comic-shadow);
+  font-size: clamp(12px, 3.3vw, 17px);
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+/* The tail: a paper triangle under the bubble, pointing down at the face. */
+.bubble::after {
+  position: absolute;
+  bottom: -9px;
+  left: calc(var(--tail-x) - 8px);
+  width: 16px;
+  height: 10px;
+  background: var(--comic-paper);
+  clip-path: polygon(0 0, 100% 0, 35% 100%);
+  filter: drop-shadow(2px 2px 0 var(--comic-shadow));
+  content: "";
+}
+
+.text {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+  animation: pop 160ms ease-out;
+}
+
+.typing {
+  display: flex;
+  gap: 0.3em;
+  padding: 0.35em 0.15em;
+}
+
+.dot {
+  width: 0.45em;
+  height: 0.45em;
+  border-radius: 50%;
+  background: var(--comic-teal);
+  animation: bounce 1s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 150ms;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 300ms;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+
+@keyframes bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-0.3em);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text,
+  .dot {
+    animation: none;
+  }
+}

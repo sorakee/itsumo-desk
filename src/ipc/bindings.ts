@@ -104,6 +104,22 @@ export const commands = {
 	providerModels: (id: string) => typedError<string[], AppError>(__TAURI_INVOKE("provider_models", { id })),
 	/**  Asks the profile's model for one short sentence, streaming it through `channel`. */
 	testProvider: (id: string, channel: Channel<TestEvent>) => typedError<TestReport, AppError>(__TAURI_INVOKE("test_provider", { id, channel })),
+	/**  Whether chat has a provider it can call, and if not, what to set up. */
+	chatStatus: () => __TAURI_INVOKE<ChatStatus>("chat_status"),
+	/**
+	 *  Sends the user's message and resolves to the new turn's id; the reply arrives as
+	 *  `SpeechSegment` events. Interrupts the turn in flight, if any.
+	 */
+	sendChat: (text: string) => typedError<number, AppError>(__TAURI_INVOKE("send_chat", { text })),
+	/**  The companion showed segment `index` of turn `turn`. */
+	reportSegmentShown: (turn: number, index: number) => __TAURI_INVOKE<void>("report_segment_shown", { turn, index }),
+	/**  The chat hotkey and whether it is registered. */
+	chatHotkey: () => __TAURI_INVOKE<HotkeyStatus>("chat_hotkey"),
+	/**
+	 *  Rebinds the chat hotkey, or with `None` goes back to the default. Synchronous on
+	 *  purpose: Tauri runs it on the main thread, where shortcuts are registered.
+	 */
+	setChatHotkey: (shortcut: string | null) => typedError<HotkeyStatus, AppError>(__TAURI_INVOKE("set_chat_hotkey", { shortcut })),
 };
 
 /** Events */
@@ -111,10 +127,13 @@ export const events = {
 	activeCharacterChanged: makeEvent<ActiveCharacterChanged>("active-character-changed"),
 	alwaysOnTopChanged: makeEvent<AlwaysOnTopChanged>("always-on-top-changed"),
 	charactersChanged: makeEvent<CharactersChanged>("characters-changed"),
+	chatRequested: makeEvent<ChatRequested>("chat-requested"),
 	cursorMoved: makeEvent<CursorMoved>("cursor-moved"),
 	mappingChanged: makeEvent<MappingChanged>("mapping-changed"),
 	providersChanged: makeEvent<ProvidersChanged>("providers-changed"),
 	resetFraming: makeEvent<ResetFraming>("reset-framing"),
+	speechSegment: makeEvent<SpeechSegment>("speech-segment"),
+	turnEnded: makeEvent<TurnEnded>("turn-ended"),
 };
 
 /* Types */
@@ -145,7 +164,7 @@ export type AlwaysOnTopChanged = {
  *  The one error type that crosses IPC. Module errors convert into it at the command
  *  boundary; messages must never carry secrets.
  */
-export type AppError = { kind: "invalidArgument"; message: string } | { kind: "window"; message: string } | { kind: "character"; message: string } | { kind: "provider"; message: string };
+export type AppError = { kind: "invalidArgument"; message: string } | { kind: "window"; message: string } | { kind: "character"; message: string } | { kind: "provider"; message: string } | { kind: "chat"; message: string } | { kind: "hotkey"; message: string };
 
 export type AppInfo = {
 	name: string,
@@ -194,6 +213,16 @@ export type CharacterSummary = {
 /**  A character was installed or removed. */
 export type CharactersChanged = null;
 
+/**  The chat hotkey was pressed: the companion opens and focuses its chat input. */
+export type ChatRequested = null;
+
+/**  Whether chat can be used, so the chat input can say so before anything is typed. */
+export type ChatStatus = { kind: "ready"; 
+/**  The profile chat uses, by name. */
+provider: string } | 
+/**  `message` says what to set up in Settings. */
+{ kind: "notReady"; message: string };
+
 /**
  *  The global cursor, relative to the companion's client area in CSS pixels. Values outside
  *  the window's size mean the cursor is elsewhere on the desktop.
@@ -241,6 +270,15 @@ export type Framing = {
 export type HitAreaInfo = {
 	id: string,
 	name: string,
+};
+
+/**  The chat hotkey as Settings shows it. */
+export type HotkeyStatus = {
+	/**  Modifiers first, then the key, e.g. `Ctrl+Alt+Space`. */
+	shortcut: string,
+	isDefault: boolean,
+	/**  Why the shortcut is not registered; it does nothing until this is fixed. */
+	error: string | null,
 };
 
 /**  What to pick in the native dialog. */
@@ -379,6 +417,17 @@ export type ProvidersChanged = null;
  */
 export type ResetFraming = null;
 
+/**
+ *  One segment of the companion's reply, a sentence or short utterance, sent as soon as it
+ *  is complete. The companion shows it as a subtitle; from M3 it also carries the speech.
+ *  `index` counts from 0 within the turn.
+ */
+export type SpeechSegment = {
+	turn: number,
+	index: number,
+	text: string,
+};
+
 /**  A pack copied into staging and validated, waiting for the webview to build its manifest. */
 export type StagedImport = {
 	token: string,
@@ -404,6 +453,15 @@ export type TestReport = {
 	firstTokenMs: number,
 	/**  The test stopped reading before the reply ended. */
 	truncated: boolean,
+};
+
+/**
+ *  A chat turn is over: the reply ended, or `error` says why it stopped. An interrupted turn
+ *  sends nothing; the next turn's segments replace it.
+ */
+export type TurnEnded = {
+	turn: number,
+	error: string | null,
 };
 
 /* Tauri Specta runtime */

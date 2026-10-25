@@ -3,6 +3,7 @@ import { type AppInfo, commands } from "@/ipc";
 import { syncCharactersStore } from "@/stores/characters";
 import { syncProvidersStore } from "@/stores/providers";
 import { CharactersSection } from "@/windows/settings/CharactersSection";
+import { GeneralSection } from "@/windows/settings/GeneralSection";
 import { MappingView } from "@/windows/settings/MappingView";
 import { ProvidersSection } from "@/windows/settings/ProvidersSection";
 import { SettingsNav, type SettingsPage } from "@/windows/settings/SettingsNav";
@@ -48,6 +49,7 @@ export function SettingsApp() {
           <CharactersSection onEditMapping={(id, imported) => setMappingFor({ id, imported })} />
         )}
         {page === "providers" && <ProvidersSection />}
+        {page === "general" && <GeneralSection />}
       </main>
     </div>
   );
